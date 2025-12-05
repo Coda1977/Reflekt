@@ -130,6 +130,6 @@ export const getAllClients = query({
       Array.from(clientIds).map((id) => ctx.db.get(id!))
     );
 
-    return clients.filter(Boolean);
+    return clients.filter((client): client is NonNullable<typeof client> => client !== null);
   },
 });
