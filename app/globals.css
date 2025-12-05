@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #F5F0E8;
+  --text-primary: #1A1A1A;
+  --text-secondary: #4A4A4A;
+  --accent-yellow: #FFD60A;
+  --accent-blue: #003566;
+  --white: #FFFFFF;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+@layer utilities {
+  /* Typography */
+  .text-hero {
+    font-size: clamp(48px, 8vw, 80px);
+    font-weight: 900;
+    letter-spacing: -2px;
+    line-height: 1.1;
+  }
+
+  .text-section-header {
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1.2;
+  }
+
+  .text-body {
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+
+  .text-small {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  /* Animations */
+  .transition-lift {
+    transition: all 0.3s ease;
+  }
+
+  .transition-lift:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  }
+}
+
+@layer components {
+  /* Primary Button */
+  .btn-primary {
+    @apply bg-gray-900 text-bg-primary px-10 py-4 rounded-full font-semibold text-lg transition-lift;
+  }
+
+  .btn-primary:hover {
+    @apply -translate-y-1 shadow-lg;
+  }
+
+  /* Secondary Button */
+  .btn-secondary {
+    @apply bg-white text-gray-900 px-10 py-4 rounded-full font-semibold text-lg transition-lift border-2 border-gray-900;
+  }
+
+  .btn-secondary:hover {
+    @apply -translate-y-1 shadow-lg;
+  }
+
+  /* Feature Card */
+  .feature-card {
+    @apply bg-white p-12 rounded-2xl transition-lift;
+  }
+
+  .feature-card:hover {
+    @apply -translate-y-2 shadow-xl;
+  }
+
+  /* Section Container */
+  .section-container {
+    @apply py-20 md:py-32 px-5 md:px-10;
+  }
+
+  .section-inner {
+    @apply max-w-6xl mx-auto;
+  }
+}
