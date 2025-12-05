@@ -65,7 +65,7 @@ export default function ClientsPage() {
                     {client.name || "—"}
                   </td>
                   <td className="px-6 py-4 text-gray-600 text-sm">
-                    {new Date(client.createdAt).toLocaleDateString()}
+                    {new Date(client._creationTime).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <Link
