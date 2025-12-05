@@ -48,6 +48,14 @@ export default function SettingsPage() {
     );
   }
 
+  if (user === null) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p>Please log in to access settings.</p>
+      </div>
+    );
+  }
+
   const handleSave = async () => {
     if (!profile) return;
 

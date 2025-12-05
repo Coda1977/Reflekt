@@ -22,7 +22,7 @@ export default function EditWorkbookPage() {
   const workbook = useQuery(api.workbooks.getWorkbook, { workbookId });
   const updateWorkbook = useMutation(api.workbooks.updateWorkbook);
 
-  const [localWorkbook, setLocalWorkbook] = useState<typeof workbook>(null);
+  const [localWorkbook, setLocalWorkbook] = useState<typeof workbook>(undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
@@ -31,7 +31,7 @@ export default function EditWorkbookPage() {
     setLocalWorkbook(workbook);
   }
 
-  if (workbook === undefined || localWorkbook === null) {
+  if (workbook === undefined || !localWorkbook) {
     return <LoadingPage />;
   }
 

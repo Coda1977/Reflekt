@@ -32,6 +32,12 @@ const blockType = v.union(
     id: v.string(),
     url: v.string(),
     alt: v.optional(v.string()),
+  }),
+  v.object({
+    type: v.literal("iframe"),
+    id: v.string(),
+    url: v.string(),
+    height: v.optional(v.string()),
   })
 );
 

@@ -35,7 +35,7 @@ export function ImportWordButton() {
       // Create workbook in Convex
       const workbookId = await createWorkbook({
         title: parsed.title,
-        sections: parsed.sections,
+        sections: parsed.sections as any,
       });
 
       // Redirect to editor
