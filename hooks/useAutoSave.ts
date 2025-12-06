@@ -11,20 +11,7 @@ export function useAutoSave(
   // Use ref to store the initial value so it doesn't change on re-renders
   const initialValueRef = useRef(initialValue);
   const hasInitialized = useRef(false);
-
-  // Only set initial value once on mount
-  const [value, setValue] = useState(() => {
-    hasInitialized.current = true;
-    return initialValue;
-  });
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const saveResponse = useMutation(api.responses.saveResponse);
-  const timeoutRef = useRef<NodeJS.Timeout>();
-  const retryCountRef = useRef(0);
-  const MAX_RETRIES = 3;
+  const isFirstMount = useRef(true);
 
   // Helper to compare values (handles arrays)
   const valuesAreEqual = (a: string | string[], b: string | string[]) => {
@@ -33,6 +20,37 @@ export function useAutoSave(
     }
     return a === b;
   };
+
+  // Initialize state
+  const [value, setValue] = useState(() => {
+    hasInitialized.current = true;
+    return initialValue;
+  });
+
+  // CRITICAL: Update value when initialValue changes on first load
+  // This handles the case where Convex returns cached empty data first,
+  // then returns real data with saved responses
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return; // Skip on first mount (already initialized)
+    }
+
+    // If initialValue changed and we haven't modified the value yet
+    if (!valuesAreEqual(initialValue, initialValueRef.current) && valuesAreEqual(value, initialValueRef.current)) {
+      console.log('[useAutoSave] Loading saved value:', initialValue);
+      setValue(initialValue);
+      initialValueRef.current = initialValue;
+    }
+  }, [initialValue, value]);
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const saveResponse = useMutation(api.responses.saveResponse);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 3;
 
   const performSave = useCallback(async (valueToSave: string | string[]) => {
     try {

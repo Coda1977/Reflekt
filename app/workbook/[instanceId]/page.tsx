@@ -124,6 +124,7 @@ export default function WorkbookPage() {
   const instanceId = params.instanceId as Id<"workbookInstances">;
 
   const user = useQuery(api.users.getCurrentUser);
+  // Disable caching to always get fresh data
   const data = useQuery(api.workbookInstances.getInstanceWithWorkbook, { instanceId });
 
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
@@ -190,6 +191,23 @@ export default function WorkbookPage() {
   const handleDownload = async () => {
     // Dynamically import jsPDF to avoid SSR issues
     const { default: jsPDF } = await import("jspdf");
+
+    // Helper to convert image URL to base64
+    const getBase64Image = async (url: string): Promise<string> => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (err) {
+        console.error("Failed to load image:", err);
+        throw err;
+      }
+    };
 
     const doc = new jsPDF({
       orientation: "portrait",
@@ -308,10 +326,14 @@ export default function WorkbookPage() {
             // Add image
             try {
               checkPageBreak(60);
+
+              // Convert image to base64 to avoid CORS issues
+              const base64Image = await getBase64Image(block.url);
+
               const imgWidth = contentWidth * 0.8;
               const imgHeight = 50; // Fixed height for consistency
 
-              doc.addImage(block.url, "JPEG", margin + (contentWidth - imgWidth) / 2, yPosition, imgWidth, imgHeight);
+              doc.addImage(base64Image, "JPEG", margin + (contentWidth - imgWidth) / 2, yPosition, imgWidth, imgHeight);
               yPosition += imgHeight + 5;
             } catch (err) {
               console.warn("Failed to add image to PDF:", err);
