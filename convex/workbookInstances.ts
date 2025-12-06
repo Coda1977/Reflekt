@@ -41,35 +41,50 @@ export const getOrCreateInstance = mutation({
     workbookId: v.id("workbooks"),
   },
   handler: async (ctx, args) => {
-    const userId = await auth.getUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    try {
+      console.log('[getOrCreateInstance] Starting for workbook:', args.workbookId);
 
-    // Check if workbook exists
-    const workbook = await ctx.db.get(args.workbookId);
-    if (!workbook) throw new Error("Workbook not found");
+      const userId = await auth.getUserId(ctx);
+      console.log('[getOrCreateInstance] User ID:', userId);
+      if (!userId) throw new Error("Not authenticated");
 
-    // Check if user already has an instance for this workbook
-    const existingInstance = await ctx.db
-      .query("workbookInstances")
-      .withIndex("by_workbook", (q) => q.eq("workbookId", args.workbookId))
-      .filter((q) => q.eq(q.field("clientId"), userId))
-      .first();
+      // Check if workbook exists
+      const workbook = await ctx.db.get(args.workbookId);
+      console.log('[getOrCreateInstance] Workbook found:', !!workbook);
+      if (!workbook) throw new Error("Workbook not found");
 
-    if (existingInstance) {
-      return existingInstance._id;
+      // Check if user already has an instance for this workbook
+      console.log('[getOrCreateInstance] Checking for existing instance...');
+      const existingInstance = await ctx.db
+        .query("workbookInstances")
+        .withIndex("by_workbook", (q) => q.eq("workbookId", args.workbookId))
+        .filter((q) => q.eq(q.field("clientId"), userId))
+        .first();
+
+      if (existingInstance) {
+        console.log('[getOrCreateInstance] Found existing instance:', existingInstance._id);
+        return existingInstance._id;
+      }
+
+      // Create new instance for this user
+      console.log('[getOrCreateInstance] Creating new instance...');
+      const instanceId = await ctx.db.insert("workbookInstances", {
+        workbookId: args.workbookId,
+        clientId: userId,
+        inviteToken: generateInviteToken(),
+        responses: {},
+        startedAt: Date.now(),
+        lastUpdatedAt: Date.now(),
+      });
+
+      console.log('[getOrCreateInstance] Created new instance:', instanceId);
+      return instanceId;
+    } catch (error) {
+      console.error('[getOrCreateInstance] ERROR:', error);
+      console.error('[getOrCreateInstance] Error message:', (error as Error).message);
+      console.error('[getOrCreateInstance] Error stack:', (error as Error).stack);
+      throw error;
     }
-
-    // Create new instance for this user
-    const instanceId = await ctx.db.insert("workbookInstances", {
-      workbookId: args.workbookId,
-      clientId: userId,
-      inviteToken: generateInviteToken(),
-      responses: {},
-      startedAt: Date.now(),
-      lastUpdatedAt: Date.now(),
-    });
-
-    return instanceId;
   },
 });
 

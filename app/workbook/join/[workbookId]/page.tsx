@@ -38,11 +38,15 @@ export default function JoinWorkbookPage() {
     setError(null);
 
     try {
+      console.log('[Join Page] Attempting to get or create instance for workbook:', workbookId);
       const instanceId = await getOrCreateInstance({ workbookId });
+      console.log('[Join Page] Successfully created/got instance:', instanceId);
       // Redirect to the workbook instance
       router.push(`/workbook/${instanceId}`);
     } catch (err) {
-      console.error("Failed to access workbook:", err);
+      console.error("[Join Page] Failed to access workbook. Error:", err);
+      console.error("[Join Page] Error message:", (err as Error).message);
+      console.error("[Join Page] Error stack:", (err as Error).stack);
       setError("Failed to access workbook. Please try again.");
     } finally {
       setIsCreating(false);
