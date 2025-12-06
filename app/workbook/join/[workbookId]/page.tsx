@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
@@ -15,25 +15,12 @@ export default function JoinWorkbookPage() {
   const user = useQuery(api.users.getCurrentUser);
   const getOrCreateInstance = useMutation(api.workbookInstances.getOrCreateInstance);
   const [isCreating, setIsCreating] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user === undefined) return; // Still loading
+  const handleGetOrCreateInstance = useCallback(async () => {
+    if (isCreating) return; // Prevent duplicate calls
 
-    // Redirect to login if not authenticated
-    if (user === null) {
-      const redirectUrl = `/workbook/join/${workbookId}`;
-      router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
-      return;
-    }
-
-    // User is authenticated - get or create their instance
-    if (!isCreating) {
-      handleGetOrCreateInstance();
-    }
-  }, [user, workbookId]);
-
-  const handleGetOrCreateInstance = async () => {
     setIsCreating(true);
     setError(null);
 
@@ -51,7 +38,35 @@ export default function JoinWorkbookPage() {
     } finally {
       setIsCreating(false);
     }
-  };
+  }, [workbookId, getOrCreateInstance, router, isCreating]);
+
+  useEffect(() => {
+    console.log('[Join Page] Effect running - user:', user === undefined ? 'loading' : user === null ? 'not logged in' : 'logged in');
+
+    // Still loading user
+    if (user === undefined) {
+      console.log('[Join Page] User still loading, waiting...');
+      return;
+    }
+
+    // Not authenticated - redirect to login
+    if (user === null) {
+      if (isRedirecting) {
+        console.log('[Join Page] Already redirecting to login, skipping...');
+        return;
+      }
+
+      console.log('[Join Page] User not authenticated, redirecting to login...');
+      setIsRedirecting(true);
+      const redirectUrl = `/workbook/join/${workbookId}`;
+      router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
+      return;
+    }
+
+    // User is authenticated - get or create their instance
+    console.log('[Join Page] User authenticated, getting/creating instance...');
+    handleGetOrCreateInstance();
+  }, [user, workbookId, router, isRedirecting, handleGetOrCreateInstance]);
 
   if (error) {
     return (
