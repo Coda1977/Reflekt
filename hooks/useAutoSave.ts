@@ -27,6 +27,10 @@ export function useAutoSave(
     return initialValue;
   });
 
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
   // CRITICAL: Update value when initialValue changes on first load
   // This handles the case where Convex returns cached empty data first,
   // then returns real data with saved responses
@@ -36,17 +40,24 @@ export function useAutoSave(
       return; // Skip on first mount (already initialized)
     }
 
-    // If initialValue changed and we haven't modified the value yet
-    if (!valuesAreEqual(initialValue, initialValueRef.current) && valuesAreEqual(value, initialValueRef.current)) {
+    // Only update if:
+    // 1. We're not currently saving (would overwrite user's typing)
+    // 2. initialValue changed from what we stored
+    // 3. Current value equals our old stored value (user hasn't typed anything new)
+    // 4. New initialValue is NOT empty (don't overwrite with cached empty data)
+    const hasContent = Array.isArray(initialValue) ? initialValue.length > 0 : initialValue !== "";
+
+    if (
+      !saving &&
+      !valuesAreEqual(initialValue, initialValueRef.current) &&
+      valuesAreEqual(value, initialValueRef.current) &&
+      hasContent
+    ) {
       console.log('[useAutoSave] Loading saved value:', initialValue);
       setValue(initialValue);
       initialValueRef.current = initialValue;
     }
-  }, [initialValue, value]);
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  }, [initialValue, value, saving]);
   const saveResponse = useMutation(api.responses.saveResponse);
   const timeoutRef = useRef<NodeJS.Timeout>();
   const retryCountRef = useRef(0);
