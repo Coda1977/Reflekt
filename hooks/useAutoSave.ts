@@ -8,7 +8,16 @@ export function useAutoSave(
   blockId: string,
   initialValue: string | string[]
 ) {
-  const [value, setValue] = useState(initialValue);
+  // Use ref to store the initial value so it doesn't change on re-renders
+  const initialValueRef = useRef(initialValue);
+  const hasInitialized = useRef(false);
+
+  // Only set initial value once on mount
+  const [value, setValue] = useState(() => {
+    hasInitialized.current = true;
+    return initialValue;
+  });
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -16,6 +25,14 @@ export function useAutoSave(
   const timeoutRef = useRef<NodeJS.Timeout>();
   const retryCountRef = useRef(0);
   const MAX_RETRIES = 3;
+
+  // Helper to compare values (handles arrays)
+  const valuesAreEqual = (a: string | string[], b: string | string[]) => {
+    if (Array.isArray(a) && Array.isArray(b)) {
+      return a.length === b.length && a.every((val, idx) => val === b[idx]);
+    }
+    return a === b;
+  };
 
   const performSave = useCallback(async (valueToSave: string | string[]) => {
     try {
@@ -27,6 +44,10 @@ export function useAutoSave(
       setLastSaved(new Date());
       setError(null);
       retryCountRef.current = 0; // Reset retry count on success
+
+      // CRITICAL: Update initialValueRef to the saved value
+      // This prevents re-saving the same value when the component re-renders
+      initialValueRef.current = valueToSave;
     } catch (err) {
       console.error("Failed to save response:", err);
 
@@ -57,7 +78,7 @@ export function useAutoSave(
     }
 
     // Don't save if value hasn't changed from initial
-    if (value === initialValue) {
+    if (valuesAreEqual(value, initialValueRef.current)) {
       return;
     }
 
@@ -76,7 +97,7 @@ export function useAutoSave(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, initialValue]); // Removed performSave to prevent infinite loop
+  }, [value]); // Only trigger on value changes, not initialValue
 
   return {
     value,
