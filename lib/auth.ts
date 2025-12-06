@@ -44,18 +44,17 @@ export const useAuth = () => {
     name?: string;
   }) => {
     try {
-      // First sign up
-      const result = await signIn("password", {
+      // Sign up with role parameter
+      await signIn("password", {
         email,
         password,
         flow: "signUp",
+        // Pass role as params so it's available in createOrUpdateUser callback
+        role,
       });
 
-      // Wait a moment for auth to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Then update the role
-      await updateRole({ role });
+      // Wait for auth session to fully establish
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       return { success: true };
     } catch (error) {
