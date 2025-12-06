@@ -187,6 +187,44 @@ export default function WorkbookPage() {
     }
   };
 
+  const handleDownload = () => {
+    // Generate a text file with all responses
+    let content = `${workbook.title}\n${"=".repeat(workbook.title.length)}\n\n`;
+
+    workbook.sections.forEach((section, sIdx) => {
+      content += `${section.title}\n${"-".repeat(section.title.length)}\n\n`;
+
+      section.pages.forEach((page, pIdx) => {
+        content += `${page.title}\n\n`;
+
+        page.blocks.forEach((block: any) => {
+          if (block.type === "input" && instance.responses[block.id]) {
+            content += `${block.label}:\n${instance.responses[block.id]}\n\n`;
+          } else if (block.type === "checkbox" && instance.responses[block.id]) {
+            const selectedIds = instance.responses[block.id] as string[];
+            const selectedTexts = block.options
+              .filter((opt: any) => selectedIds.includes(opt.id))
+              .map((opt: any) => opt.text);
+            content += `${block.label}:\n${selectedTexts.join(", ")}\n\n`;
+          }
+        });
+      });
+    });
+
+    // Create and download the file
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${workbook.title.replace(/[^a-z0-9]/gi, "_")}_responses.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const isCompleted = currentPageNumber === totalPages;
+
   return (
     <div className="min-h-screen bg-bg-primary">
       {/* Header */}
@@ -291,13 +329,21 @@ export default function WorkbookPage() {
               {currentPageNumber} / {totalPages}
             </div>
 
-            <Button
-              variant="primary"
-              onClick={handleNext}
-              disabled={!canGoNext}
-            >
-              {canGoNext ? "Next →" : "Completed ✓"}
-            </Button>
+            {isCompleted ? (
+              <Button
+                variant="primary"
+                onClick={handleDownload}
+              >
+                Download Responses ⬇
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={handleNext}
+              >
+                Next →
+              </Button>
+            )}
           </div>
         </div>
       </main>

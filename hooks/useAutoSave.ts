@@ -75,7 +75,8 @@ export function useAutoSave(
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [value, initialValue, performSave]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, initialValue]); // Removed performSave to prevent infinite loop
 
   return {
     value,
