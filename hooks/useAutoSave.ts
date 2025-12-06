@@ -8,10 +8,8 @@ export function useAutoSave(
   blockId: string,
   initialValue: string | string[]
 ) {
-  // Use ref to store the initial value so it doesn't change on re-renders
-  const initialValueRef = useRef(initialValue);
-  const hasInitialized = useRef(false);
-  const isFirstMount = useRef(true);
+  // Track if user has made local changes
+  const hasLocalChanges = useRef(false);
 
   // Helper to compare values (handles arrays)
   const valuesAreEqual = (a: string | string[], b: string | string[]) => {
@@ -21,43 +19,26 @@ export function useAutoSave(
     return a === b;
   };
 
-  // Initialize state
-  const [value, setValue] = useState(() => {
-    hasInitialized.current = true;
-    return initialValue;
-  });
+  // SIMPLE APPROACH: Always use initialValue from Convex unless user has made changes
+  const [value, setValue] = useState(initialValue);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // CRITICAL: Update value when initialValue changes on first load
-  // This handles the case where Convex returns cached empty data first,
-  // then returns real data with saved responses
+  // When initialValue changes from Convex and user hasn't made local changes, update the value
   useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      return; // Skip on first mount (already initialized)
-    }
-
-    // Only update if:
-    // 1. We're not currently saving (would overwrite user's typing)
-    // 2. initialValue changed from what we stored
-    // 3. Current value equals our old stored value (user hasn't typed anything new)
-    // 4. New initialValue is NOT empty (don't overwrite with cached empty data)
-    const hasContent = Array.isArray(initialValue) ? initialValue.length > 0 : initialValue !== "";
-
-    if (
-      !saving &&
-      !valuesAreEqual(initialValue, initialValueRef.current) &&
-      valuesAreEqual(value, initialValueRef.current) &&
-      hasContent
-    ) {
-      console.log('[useAutoSave] Loading saved value:', initialValue);
+    if (!hasLocalChanges.current && !valuesAreEqual(value, initialValue)) {
+      console.log('[useAutoSave] Loading saved value from Convex:', initialValue);
       setValue(initialValue);
-      initialValueRef.current = initialValue;
     }
-  }, [initialValue, value, saving]);
+  }, [initialValue]);
+
+  // Wrap setValue to track local changes
+  const setValueAndTrackChanges = useCallback((newValue: string | string[]) => {
+    hasLocalChanges.current = true;
+    setValue(newValue);
+  }, []);
   const saveResponse = useMutation(api.responses.saveResponse);
   const timeoutRef = useRef<NodeJS.Timeout>();
   const retryCountRef = useRef(0);
@@ -65,25 +46,27 @@ export function useAutoSave(
 
   const performSave = useCallback(async (valueToSave: string | string[]) => {
     try {
+      console.log('[useAutoSave] Saving to Convex:', valueToSave);
       await saveResponse({
         instanceId,
         blockId,
         value: valueToSave,
       });
+      console.log('[useAutoSave] Save successful!');
       setLastSaved(new Date());
       setError(null);
-      retryCountRef.current = 0; // Reset retry count on success
+      retryCountRef.current = 0;
 
-      // CRITICAL: Update initialValueRef to the saved value
-      // This prevents re-saving the same value when the component re-renders
-      initialValueRef.current = valueToSave;
+      // Reset local changes flag after successful save
+      // This allows Convex updates to flow through again
+      hasLocalChanges.current = false;
     } catch (err) {
-      console.error("Failed to save response:", err);
+      console.error("[useAutoSave] Failed to save response:", err);
 
       // Retry logic for transient failures
       if (retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current++;
-        console.log(`Retrying save (attempt ${retryCountRef.current}/${MAX_RETRIES})...`);
+        console.log(`[useAutoSave] Retrying save (attempt ${retryCountRef.current}/${MAX_RETRIES})...`);
 
         // Exponential backoff: 1s, 2s, 4s
         const backoffDelay = Math.pow(2, retryCountRef.current - 1) * 1000;
@@ -93,7 +76,7 @@ export function useAutoSave(
         }, backoffDelay);
       } else {
         setError("Failed to save. Please check your connection.");
-        retryCountRef.current = 0; // Reset for next attempt
+        retryCountRef.current = 0;
       }
     } finally {
       setSaving(false);
@@ -106,8 +89,13 @@ export function useAutoSave(
       clearTimeout(timeoutRef.current);
     }
 
-    // Don't save if value hasn't changed from initial
-    if (valuesAreEqual(value, initialValueRef.current)) {
+    // Only save if user has made local changes
+    if (!hasLocalChanges.current) {
+      return;
+    }
+
+    // Don't save if value equals what we loaded from Convex
+    if (valuesAreEqual(value, initialValue)) {
       return;
     }
 
@@ -126,11 +114,11 @@ export function useAutoSave(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]); // Only trigger on value changes, not initialValue
+  }, [value]);
 
   return {
     value,
-    setValue,
+    setValue: setValueAndTrackChanges,
     saving,
     error,
     lastSaved,
