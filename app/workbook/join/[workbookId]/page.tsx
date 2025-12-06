@@ -21,7 +21,7 @@ export default function JoinWorkbookPage() {
   const hasStartedRedirect = useRef(false);
 
   useEffect(() => {
-    console.log('[Join Page] Effect running - user:', user === undefined ? 'loading' : user === null ? 'not logged in' : 'logged in');
+    console.log('[Join Page] Effect running - user:', user === undefined ? 'loading' : user === null ? 'not logged in' : `logged in as ${user.email}`);
 
     // Still loading user
     if (user === undefined) {
@@ -43,19 +43,30 @@ export default function JoinWorkbookPage() {
       return;
     }
 
-    // User is authenticated - get or create their instance
+    // User is authenticated - but WAIT for user object to have a role
+    // This ensures the auth session is fully established
+    if (!user.role) {
+      console.log('[Join Page] User authenticated but role not set yet, waiting for role...');
+      console.log('[Join Page] User object:', user);
+      return;
+    }
+
+    // User is authenticated with role - get or create their instance
     if (hasStartedCreating.current) {
       console.log('[Join Page] Already started creating instance, skipping...');
       return;
     }
 
-    console.log('[Join Page] User authenticated, getting/creating instance...');
+    console.log('[Join Page] User fully authenticated with role:', user.role, '- getting/creating instance...');
     hasStartedCreating.current = true;
 
     const createInstance = async () => {
       try {
         console.log('[Join Page] Attempting to get or create instance for workbook:', workbookId);
+        console.log('[Join Page] Current user:', user.email, 'role:', user.role);
+
         const instanceId = await getOrCreateInstance({ workbookId });
+
         console.log('[Join Page] Successfully created/got instance:', instanceId);
         router.push(`/workbook/${instanceId}`);
       } catch (err) {
