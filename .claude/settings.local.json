@@ -32,7 +32,21 @@
       "Bash(nslookup:*)",
       "WebSearch",
       "Bash(npm uninstall:*)",
-      "Bash(if exist nul del nul)"
+      "Bash(if exist nul del nul)",
+      "Bash(cat:*)",
+      "Bash(npx playwright install chromium)",
+      "Bash(npm run test:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(Select-String -Pattern \"passed|failed|Error|✓|×\" -Context 2)",
+      "Bash(if exist .next rmdir /s /q .next)",
+      "Bash(npx playwright test:*)",
+      "Bash(xargs:*)",
+      "Bash(dir \"C:\\Users\\yonat\\OneDrive\\AI\\Apps\\Reflekt\\convex\\_generated\")",
+      "Bash(findstr:*)",
+      "Bash(npx tsc:*)",
+      "Bash(Select-String -Pattern \"error|Error\" -Context 2)",
+      "Bash(timeout:*)",
+      "Bash(if exist \"C:\\Users\\yonat\\OneDrive\\AI\\Apps\\Reflekt\\.next\" rmdir /s /q \"C:\\Users\\yonat\\OneDrive\\AI\\Apps\\Reflekt\\.next\")"
     ],
     "deny": [],
     "ask": []

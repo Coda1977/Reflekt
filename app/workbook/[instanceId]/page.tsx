@@ -187,40 +187,146 @@ export default function WorkbookPage() {
     }
   };
 
-  const handleDownload = () => {
-    // Generate a text file with all responses
-    let content = `${workbook.title}\n${"=".repeat(workbook.title.length)}\n\n`;
+  const handleDownload = async () => {
+    // Dynamically import jsPDF to avoid SSR issues
+    const { default: jsPDF } = await import("jspdf");
 
-    workbook.sections.forEach((section, sIdx) => {
-      content += `${section.title}\n${"-".repeat(section.title.length)}\n\n`;
-
-      section.pages.forEach((page, pIdx) => {
-        content += `${page.title}\n\n`;
-
-        page.blocks.forEach((block: any) => {
-          if (block.type === "input" && instance.responses[block.id]) {
-            content += `${block.label}:\n${instance.responses[block.id]}\n\n`;
-          } else if (block.type === "checkbox" && instance.responses[block.id]) {
-            const selectedIds = instance.responses[block.id] as string[];
-            const selectedTexts = block.options
-              .filter((opt: any) => selectedIds.includes(opt.id))
-              .map((opt: any) => opt.text);
-            content += `${block.label}:\n${selectedTexts.join(", ")}\n\n`;
-          }
-        });
-      });
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
     });
 
-    // Create and download the file
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${workbook.title.replace(/[^a-z0-9]/gi, "_")}_responses.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentWidth = pageWidth - 2 * margin;
+    let yPosition = margin;
+
+    // Helper to add new page if needed
+    const checkPageBreak = (neededSpace: number) => {
+      if (yPosition + neededSpace > pageHeight - margin) {
+        doc.addPage();
+        yPosition = margin;
+      }
+    };
+
+    // Helper to add text with wrapping
+    const addText = (text: string, fontSize: number, isBold: boolean = false) => {
+      doc.setFontSize(fontSize);
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
+      const lines = doc.splitTextToSize(text, contentWidth);
+      const lineHeight = fontSize * 0.5;
+
+      checkPageBreak(lines.length * lineHeight);
+
+      lines.forEach((line: string) => {
+        doc.text(line, margin, yPosition);
+        yPosition += lineHeight;
+      });
+    };
+
+    // Title
+    addText(workbook.title, 20, true);
+    yPosition += 5;
+
+    // Process each section
+    for (const section of workbook.sections) {
+      checkPageBreak(15);
+      addText(section.title, 16, true);
+      yPosition += 5;
+
+      // Process each page in section
+      for (const page of section.pages) {
+        checkPageBreak(12);
+        addText(page.title, 14, true);
+        yPosition += 3;
+
+        // Process each block
+        for (const block of page.blocks) {
+          if (block.type === "text") {
+            // Add text block content
+            checkPageBreak(10);
+            // Strip HTML and add as plain text
+            const textContent = block.content.replace(/<[^>]*>/g, "");
+            addText(textContent, 11);
+            yPosition += 3;
+          } else if (block.type === "input") {
+            // Add question label
+            checkPageBreak(15);
+            addText(block.label, 11, true);
+            yPosition += 2;
+
+            // Add response if exists
+            const response = instance.responses[block.id] as string;
+            if (response) {
+              doc.setDrawColor(200);
+              doc.setFillColor(245, 245, 245);
+              const responseLines = doc.splitTextToSize(response || "(No response)", contentWidth - 10);
+              const boxHeight = responseLines.length * 5.5 + 4;
+
+              checkPageBreak(boxHeight);
+              doc.roundedRect(margin, yPosition, contentWidth, boxHeight, 2, 2, "FD");
+
+              yPosition += 4;
+              doc.setFontSize(10);
+              doc.setFont("helvetica", "normal");
+              responseLines.forEach((line: string) => {
+                doc.text(line, margin + 3, yPosition);
+                yPosition += 5.5;
+              });
+              yPosition += 2;
+            } else {
+              addText("(No response)", 10);
+              yPosition += 2;
+            }
+            yPosition += 3;
+          } else if (block.type === "checkbox") {
+            // Add checkbox question
+            checkPageBreak(15);
+            addText(block.label, 11, true);
+            yPosition += 2;
+
+            const selectedIds = (instance.responses[block.id] as string[]) || [];
+            if (selectedIds.length > 0) {
+              const selectedTexts = block.options
+                .filter((opt: any) => selectedIds.includes(opt.id))
+                .map((opt: any) => opt.text);
+
+              selectedTexts.forEach((text: string) => {
+                checkPageBreak(8);
+                doc.setFontSize(10);
+                doc.text("☑ " + text, margin + 5, yPosition);
+                yPosition += 6;
+              });
+            } else {
+              addText("(No selections)", 10);
+              yPosition += 2;
+            }
+            yPosition += 3;
+          } else if (block.type === "image" && block.url) {
+            // Add image
+            try {
+              checkPageBreak(60);
+              const imgWidth = contentWidth * 0.8;
+              const imgHeight = 50; // Fixed height for consistency
+
+              doc.addImage(block.url, "JPEG", margin + (contentWidth - imgWidth) / 2, yPosition, imgWidth, imgHeight);
+              yPosition += imgHeight + 5;
+            } catch (err) {
+              console.warn("Failed to add image to PDF:", err);
+              addText("[Image could not be loaded]", 10);
+              yPosition += 3;
+            }
+          }
+        }
+        yPosition += 5;
+      }
+      yPosition += 5;
+    }
+
+    // Save the PDF
+    doc.save(`${workbook.title.replace(/[^a-z0-9]/gi, "_")}_responses.pdf`);
   };
 
   const isCompleted = currentPageNumber === totalPages;

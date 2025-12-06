@@ -10,14 +10,19 @@ export const saveResponse = mutation({
     value: v.union(v.string(), v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    console.log('[saveResponse] Starting save - blockId:', args.blockId, 'value:', args.value);
+
     const userId = await auth.getUserId(ctx);
+    console.log('[saveResponse] User ID:', userId);
     if (!userId) throw new Error("Not authenticated");
 
     const instance = await ctx.db.get(args.instanceId);
+    console.log('[saveResponse] Instance found:', !!instance, 'current responses:', instance?.responses);
     if (!instance) throw new Error("Instance not found");
 
     // Verify client ownership
     if (instance.clientId !== userId) {
+      console.error('[saveResponse] Authorization failed - clientId:', instance.clientId, 'userId:', userId);
       throw new Error("Not authorized");
     }
 
@@ -27,11 +32,14 @@ export const saveResponse = mutation({
       [args.blockId]: args.value,
     };
 
+    console.log('[saveResponse] Updating responses:', updatedResponses);
+
     await ctx.db.patch(args.instanceId, {
       responses: updatedResponses,
       lastUpdatedAt: Date.now(),
     });
 
+    console.log('[saveResponse] Save successful!');
     return { success: true };
   },
 });
