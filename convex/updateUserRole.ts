@@ -8,15 +8,24 @@ export const updateCurrentUserRole = mutation({
     role: v.union(v.literal("consultant"), v.literal("client")),
   },
   handler: async (ctx, args) => {
+    console.log('[updateUserRole] Starting, requested role:', args.role);
+
     const userId = await auth.getUserId(ctx);
+    console.log('[updateUserRole] Got userId:', userId);
+
     if (!userId) {
+      console.error('[updateUserRole] ERROR: Not authenticated - userId is null');
       throw new Error("Not authenticated");
     }
+
+    const user = await ctx.db.get(userId);
+    console.log('[updateUserRole] Current user:', user?.email, 'current role:', user?.role);
 
     await ctx.db.patch(userId, {
       role: args.role,
     });
 
+    console.log('[updateUserRole] Successfully updated role to:', args.role);
     return { success: true };
   },
 });

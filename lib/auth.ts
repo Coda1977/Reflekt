@@ -44,20 +44,51 @@ export const useAuth = () => {
     name?: string;
   }) => {
     try {
-      // Sign up with role parameter
+      console.log('[Auth Client] Starting signup for role:', role);
+
+      // Sign up with Convex auth
       await signIn("password", {
         email,
         password,
         flow: "signUp",
-        // Pass role as params so it's available in createOrUpdateUser callback
-        role,
       });
 
-      // Wait for auth session to fully establish
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('[Auth Client] Signup completed, waiting for session...');
 
+      // Wait for auth session to establish
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      console.log('[Auth Client] Updating role to:', role);
+
+      // Update role after signup with retry logic
+      let roleUpdateSuccess = false;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          console.log(`[Auth Client] Role update attempt ${attempt}/5`);
+          await updateRole({ role });
+          console.log('[Auth Client] Role updated successfully');
+          roleUpdateSuccess = true;
+          break;
+        } catch (roleError) {
+          console.error(`[Auth Client] Role update attempt ${attempt} failed:`, roleError);
+          if (attempt < 5) {
+            // Wait with exponential backoff: 500ms, 1000ms, 1500ms, 2000ms
+            const waitTime = attempt * 500;
+            console.log(`[Auth Client] Waiting ${waitTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
+      }
+
+      if (!roleUpdateSuccess) {
+        console.warn('[Auth Client] WARNING: Failed to set role after 5 attempts');
+        // Continue anyway - user is created and authenticated
+      }
+
+      console.log('[Auth Client] Signup flow completed');
       return { success: true };
     } catch (error) {
+      console.error('[Auth Client] Signup failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Sign up failed",
