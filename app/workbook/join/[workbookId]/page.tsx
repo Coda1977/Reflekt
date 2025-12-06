@@ -57,11 +57,16 @@ export default function JoinWorkbookPage() {
       return;
     }
 
-    console.log('[Join Page] User fully authenticated with role:', user.role, '- getting/creating instance...');
+    console.log('[Join Page] User fully authenticated with role:', user.role, '- waiting for server auth sync...');
     hasStartedCreating.current = true;
 
     const createInstance = async () => {
       try {
+        // CRITICAL: Wait for server-side auth to sync with client-side auth
+        // The client-side getCurrentUser query updates faster than server-side auth.getUserId()
+        console.log('[Join Page] Waiting 2 seconds for server-side auth to fully sync...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         console.log('[Join Page] Attempting to get or create instance for workbook:', workbookId);
         console.log('[Join Page] Current user:', user.email, 'role:', user.role);
 
