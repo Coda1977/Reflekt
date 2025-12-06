@@ -23,7 +23,16 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npx vercel:*)",
+      "Bash(npm run build:*)",
+      "Bash(Select-String -Pattern \"error|Failed|success\" -Context 2)",
+      "Bash(powershell -Command:*)",
+      "Bash(git reset:*)",
+      "Bash(nslookup:*)",
+      "WebSearch",
+      "Bash(npm uninstall:*)",
+      "Bash(if exist nul del nul)"
     ],
     "deny": [],
     "ask": []

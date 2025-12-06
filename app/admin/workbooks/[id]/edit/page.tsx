@@ -10,7 +10,22 @@ import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { QRCodeModal } from "@/components/QRCodeModal";
-import clsx from "clsx";
+import { SortableItem } from "@/components/editor/SortableItem";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 
 type BlockType = "text" | "input" | "checkbox" | "image" | "iframe";
 
@@ -25,6 +40,14 @@ export default function EditWorkbookPage() {
   const [localWorkbook, setLocalWorkbook] = useState<typeof workbook>(undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+
+  // Configure sensors for drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Initialize local state when workbook loads
   if (workbook && !localWorkbook) {
@@ -224,6 +247,84 @@ export default function EditWorkbookPage() {
     });
   };
 
+  // Handle drag end for blocks
+  const handleBlockDragEnd = (event: DragEndEvent, sectionId: string, pageId: string) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    setLocalWorkbook((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        sections: prev.sections.map((section) =>
+          section.id === sectionId
+            ? {
+                ...section,
+                pages: section.pages.map((page) => {
+                  if (page.id !== pageId) return page;
+
+                  const oldIndex = page.blocks.findIndex((b: any) => b.id === active.id);
+                  const newIndex = page.blocks.findIndex((b: any) => b.id === over.id);
+
+                  return {
+                    ...page,
+                    blocks: arrayMove(page.blocks, oldIndex, newIndex),
+                  };
+                }),
+              }
+            : section
+        ),
+      };
+    });
+  };
+
+  // Handle drag end for pages
+  const handlePageDragEnd = (event: DragEndEvent, sectionId: string) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    setLocalWorkbook((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        sections: prev.sections.map((section) => {
+          if (section.id !== sectionId) return section;
+
+          const oldIndex = section.pages.findIndex((p) => p.id === active.id);
+          const newIndex = section.pages.findIndex((p) => p.id === over.id);
+
+          return {
+            ...section,
+            pages: arrayMove(section.pages, oldIndex, newIndex),
+          };
+        }),
+      };
+    });
+  };
+
+  // Handle drag end for sections
+  const handleSectionDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    setLocalWorkbook((prev) => {
+      if (!prev) return prev;
+
+      const oldIndex = prev.sections.findIndex((s) => s.id === active.id);
+      const newIndex = prev.sections.findIndex((s) => s.id === over.id);
+
+      return {
+        ...prev,
+        sections: arrayMove(prev.sections, oldIndex, newIndex),
+      };
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -279,306 +380,349 @@ export default function EditWorkbookPage() {
                 + Add Section
               </button>
             </div>
+            <div className="mt-6 p-3 bg-blue-50 rounded-lg text-xs text-gray-700">
+              <p className="font-semibold mb-1">💡 Drag & Drop</p>
+              <p>Hover over items to see drag handles. Reorder sections, pages, and blocks by dragging.</p>
+            </div>
           </div>
         </div>
 
         {/* Main Canvas */}
         <div className="col-span-9">
           <div className="bg-white rounded-xl p-8 space-y-8">
-            {localWorkbook.sections.map((section, sectionIndex) => (
-              <div key={section.id} className="border-l-4 border-accent-blue pl-6">
-                {/* Section Header */}
-                <div className="mb-6">
-                  <div className="flex items-center gap-3">
-                    <Input
-                      value={section.title}
-                      onChange={(e) => {
-                        const newSections = [...localWorkbook.sections];
-                        newSections[sectionIndex] = { ...section, title: e.target.value };
-                        setLocalWorkbook({ ...localWorkbook, sections: newSections });
-                      }}
-                      className="text-xl font-bold flex-1"
-                      placeholder="Section Title"
-                    />
-                    <button
-                      onClick={() => deleteSection(section.id)}
-                      className="text-red-600 hover:text-red-700 text-sm font-semibold"
-                      title="Delete Section"
-                    >
-                      🗑️ Delete
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => addPage(section.id)}
-                    className="mt-2 text-sm text-accent-blue hover:underline"
-                  >
-                    + Add Page
-                  </button>
-                </div>
-
-                {/* Pages */}
-                {section.pages.map((page, pageIndex) => (
-                  <div key={page.id} className="mb-8 p-6 border border-gray-200 rounded-lg">
-                    {/* Page Header */}
-                    <div className="mb-4 flex items-center gap-3">
-                      <Input
-                        value={page.title}
-                        onChange={(e) => {
-                          const newSections = [...localWorkbook.sections];
-                          newSections[sectionIndex].pages[pageIndex] = {
-                            ...page,
-                            title: e.target.value,
-                          };
-                          setLocalWorkbook({ ...localWorkbook, sections: newSections });
-                        }}
-                        className="font-semibold flex-1"
-                        placeholder="Page Title"
-                      />
-                      <button
-                        onClick={() => deletePage(section.id, page.id)}
-                        className="text-red-600 hover:text-red-700 text-xs font-semibold"
-                        title="Delete Page"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-
-                    {/* Blocks */}
-                    <div className="space-y-4">
-                      {page.blocks.map((block: any) => (
-                        <div key={block.id} className="p-4 bg-gray-50 rounded-lg">
-                          {/* Block Type Indicator */}
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="text-xs font-semibold text-gray-600 uppercase">
-                              {block.type} Block
-                            </span>
-                            <button
-                              onClick={() => deleteBlock(section.id, page.id, block.id)}
-                              className="text-red-600 hover:text-red-700 text-sm font-semibold"
-                            >
-                              Delete
-                            </button>
-                          </div>
-
-                          {/* Block Content */}
-                          {block.type === "text" && (
-                            <TiptapEditor
-                              content={block.content}
-                              onChange={(content) =>
-                                updateBlock(section.id, page.id, block.id, { content })
-                              }
-                              placeholder="Enter your text here..."
-                            />
-                          )}
-
-                          {block.type === "input" && (
-                            <div className="space-y-2">
-                              <Input
-                                label="Question Label"
-                                value={block.label}
-                                onChange={(e) =>
-                                  updateBlock(section.id, page.id, block.id, {
-                                    label: e.target.value,
-                                  })
-                                }
-                                placeholder="Enter your question"
-                              />
-                              <Input
-                                label="Placeholder (optional)"
-                                value={block.placeholder || ""}
-                                onChange={(e) =>
-                                  updateBlock(section.id, page.id, block.id, {
-                                    placeholder: e.target.value,
-                                  })
-                                }
-                                placeholder="e.g., Type your answer here..."
-                              />
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={block.multiline}
-                                  onChange={(e) =>
-                                    updateBlock(section.id, page.id, block.id, {
-                                      multiline: e.target.checked,
-                                    })
-                                  }
-                                />
-                                <span className="text-sm">Multiline input</span>
-                              </label>
-                            </div>
-                          )}
-
-                          {block.type === "checkbox" && (
-                            <div className="space-y-2">
-                              <Input
-                                label="Question Label"
-                                value={block.label}
-                                onChange={(e) =>
-                                  updateBlock(section.id, page.id, block.id, {
-                                    label: e.target.value,
-                                  })
-                                }
-                                placeholder="Enter your question"
-                              />
-                              <div className="space-y-2 mt-2">
-                                <label className="text-sm font-semibold">Options:</label>
-                                {block.options.map((option: any, optIndex: number) => (
-                                  <div key={option.id} className="flex gap-2">
-                                    <Input
-                                      value={option.text}
-                                      onChange={(e) => {
-                                        const newOptions = [...block.options];
-                                        newOptions[optIndex] = { ...option, text: e.target.value };
-                                        updateBlock(section.id, page.id, block.id, {
-                                          options: newOptions,
-                                        });
-                                      }}
-                                      placeholder={`Option ${optIndex + 1}`}
-                                    />
-                                    <button
-                                      onClick={() => {
-                                        const newOptions = block.options.filter(
-                                          (_: any, i: number) => i !== optIndex
-                                        );
-                                        updateBlock(section.id, page.id, block.id, {
-                                          options: newOptions,
-                                        });
-                                      }}
-                                      className="text-red-600 hover:text-red-700 text-sm"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                ))}
-                                <button
-                                  onClick={() => {
-                                    updateBlock(section.id, page.id, block.id, {
-                                      options: [
-                                        ...block.options,
-                                        {
-                                          id: crypto.randomUUID(),
-                                          text: `Option ${block.options.length + 1}`,
-                                        },
-                                      ],
-                                    });
-                                  }}
-                                  className="text-sm text-accent-blue hover:underline"
-                                >
-                                  + Add Option
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {block.type === "image" && (
-                            <div className="space-y-2">
-                              <Input
-                                label="Image URL"
-                                value={block.url}
-                                onChange={(e) =>
-                                  updateBlock(section.id, page.id, block.id, {
-                                    url: e.target.value,
-                                  })
-                                }
-                                placeholder="Enter image URL"
-                              />
-                              <Input
-                                label="Alt Text (optional)"
-                                value={block.alt || ""}
-                                onChange={(e) =>
-                                  updateBlock(section.id, page.id, block.id, {
-                                    alt: e.target.value,
-                                  })
-                                }
-                                placeholder="Describe the image"
-                              />
-                              {block.url && (
-                                <img
-                                  src={block.url}
-                                  alt={block.alt || ""}
-                                  className="mt-2 max-w-full h-auto rounded-lg"
-                                />
-                              )}
-                            </div>
-                          )}
-
-                          {block.type === "iframe" && (
-                            <div className="space-y-2">
-                              <Input
-                                label="iFrame URL (e.g., YouTube embed, Google Form, etc.)"
-                                value={block.url}
-                                onChange={(e) =>
-                                  updateBlock(section.id, page.id, block.id, {
-                                    url: e.target.value,
-                                  })
-                                }
-                                placeholder="Enter iframe embed URL"
-                              />
-                              <Input
-                                label="Height (px)"
-                                value={block.height || "400"}
-                                onChange={(e) =>
-                                  updateBlock(section.id, page.id, block.id, {
-                                    height: e.target.value,
-                                  })
-                                }
-                                placeholder="400"
-                              />
-                              {block.url && (
-                                <div className="mt-2">
-                                  <iframe
-                                    src={block.url}
-                                    width="100%"
-                                    height={block.height || "400"}
-                                    frameBorder="0"
-                                    allowFullScreen
-                                    className="rounded-lg border border-gray-200"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          )}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleSectionDragEnd}
+            >
+              <SortableContext
+                items={localWorkbook.sections.map((s) => s.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {localWorkbook.sections.map((section, sectionIndex) => (
+                  <SortableItem key={section.id} id={section.id}>
+                    <div className="border-l-4 border-accent-blue pl-6">
+                      {/* Section Header */}
+                      <div className="mb-6">
+                        <div className="flex items-center gap-3">
+                          <Input
+                            value={section.title}
+                            onChange={(e) => {
+                              const newSections = [...localWorkbook.sections];
+                              newSections[sectionIndex] = { ...section, title: e.target.value };
+                              setLocalWorkbook({ ...localWorkbook, sections: newSections });
+                            }}
+                            className="text-xl font-bold flex-1"
+                            placeholder="Section Title"
+                          />
+                          <button
+                            onClick={() => deleteSection(section.id)}
+                            className="text-red-600 hover:text-red-700 text-sm font-semibold"
+                            title="Delete Section"
+                          >
+                            🗑️ Delete
+                          </button>
                         </div>
-                      ))}
-
-                      {/* Add Block Buttons */}
-                      <div className="flex flex-wrap gap-2 pt-2">
                         <button
-                          onClick={() => addBlock(section.id, page.id, "text")}
-                          className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
+                          onClick={() => addPage(section.id)}
+                          className="mt-2 text-sm text-accent-blue hover:underline"
                         >
-                          + Text
-                        </button>
-                        <button
-                          onClick={() => addBlock(section.id, page.id, "input")}
-                          className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
-                        >
-                          + Input
-                        </button>
-                        <button
-                          onClick={() => addBlock(section.id, page.id, "checkbox")}
-                          className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
-                        >
-                          + Checkbox
-                        </button>
-                        <button
-                          onClick={() => addBlock(section.id, page.id, "image")}
-                          className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
-                        >
-                          + Image
-                        </button>
-                        <button
-                          onClick={() => addBlock(section.id, page.id, "iframe")}
-                          className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
-                        >
-                          + iFrame
+                          + Add Page
                         </button>
                       </div>
+
+                      {/* Pages */}
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={(e) => handlePageDragEnd(e, section.id)}
+                      >
+                        <SortableContext
+                          items={section.pages.map((p) => p.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {section.pages.map((page, pageIndex) => (
+                            <SortableItem key={page.id} id={page.id} className="mb-8">
+                              <div className="p-6 border border-gray-200 rounded-lg">
+                                {/* Page Header */}
+                                <div className="mb-4 flex items-center gap-3">
+                                  <Input
+                                    value={page.title}
+                                    onChange={(e) => {
+                                      const newSections = [...localWorkbook.sections];
+                                      newSections[sectionIndex].pages[pageIndex] = {
+                                        ...page,
+                                        title: e.target.value,
+                                      };
+                                      setLocalWorkbook({ ...localWorkbook, sections: newSections });
+                                    }}
+                                    className="font-semibold flex-1"
+                                    placeholder="Page Title"
+                                  />
+                                  <button
+                                    onClick={() => deletePage(section.id, page.id)}
+                                    className="text-red-600 hover:text-red-700 text-xs font-semibold"
+                                    title="Delete Page"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+
+                                {/* Blocks */}
+                                <DndContext
+                                  sensors={sensors}
+                                  collisionDetection={closestCenter}
+                                  onDragEnd={(e) => handleBlockDragEnd(e, section.id, page.id)}
+                                >
+                                  <SortableContext
+                                    items={page.blocks.map((b: any) => b.id)}
+                                    strategy={verticalListSortingStrategy}
+                                  >
+                                    <div className="space-y-4">
+                                      {page.blocks.map((block: any) => (
+                                        <SortableItem key={block.id} id={block.id}>
+                                          <div className="p-4 bg-gray-50 rounded-lg">
+                                            {/* Block Type Indicator */}
+                                            <div className="flex justify-between items-center mb-3">
+                                              <span className="text-xs font-semibold text-gray-600 uppercase">
+                                                {block.type} Block
+                                              </span>
+                                              <button
+                                                onClick={() => deleteBlock(section.id, page.id, block.id)}
+                                                className="text-red-600 hover:text-red-700 text-sm font-semibold"
+                                              >
+                                                Delete
+                                              </button>
+                                            </div>
+
+                                            {/* Block Content */}
+                                            {block.type === "text" && (
+                                              <TiptapEditor
+                                                content={block.content}
+                                                onChange={(content) =>
+                                                  updateBlock(section.id, page.id, block.id, { content })
+                                                }
+                                                placeholder="Enter your text here..."
+                                              />
+                                            )}
+
+                                            {block.type === "input" && (
+                                              <div className="space-y-2">
+                                                <Input
+                                                  label="Question Label"
+                                                  value={block.label}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      label: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Enter your question"
+                                                />
+                                                <Input
+                                                  label="Placeholder (optional)"
+                                                  value={block.placeholder || ""}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      placeholder: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="e.g., Type your answer here..."
+                                                />
+                                                <label className="flex items-center gap-2">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={block.multiline}
+                                                    onChange={(e) =>
+                                                      updateBlock(section.id, page.id, block.id, {
+                                                        multiline: e.target.checked,
+                                                      })
+                                                    }
+                                                  />
+                                                  <span className="text-sm">Multiline input</span>
+                                                </label>
+                                              </div>
+                                            )}
+
+                                            {block.type === "checkbox" && (
+                                              <div className="space-y-2">
+                                                <Input
+                                                  label="Question Label"
+                                                  value={block.label}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      label: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Enter your question"
+                                                />
+                                                <div className="space-y-2 mt-2">
+                                                  <label className="text-sm font-semibold">Options:</label>
+                                                  {block.options.map((option: any, optIndex: number) => (
+                                                    <div key={option.id} className="flex gap-2">
+                                                      <Input
+                                                        value={option.text}
+                                                        onChange={(e) => {
+                                                          const newOptions = [...block.options];
+                                                          newOptions[optIndex] = { ...option, text: e.target.value };
+                                                          updateBlock(section.id, page.id, block.id, {
+                                                            options: newOptions,
+                                                          });
+                                                        }}
+                                                        placeholder={`Option ${optIndex + 1}`}
+                                                      />
+                                                      <button
+                                                        onClick={() => {
+                                                          const newOptions = block.options.filter(
+                                                            (_: any, i: number) => i !== optIndex
+                                                          );
+                                                          updateBlock(section.id, page.id, block.id, {
+                                                            options: newOptions,
+                                                          });
+                                                        }}
+                                                        className="text-red-600 hover:text-red-700 text-sm"
+                                                      >
+                                                        ×
+                                                      </button>
+                                                    </div>
+                                                  ))}
+                                                  <button
+                                                    onClick={() => {
+                                                      updateBlock(section.id, page.id, block.id, {
+                                                        options: [
+                                                          ...block.options,
+                                                          {
+                                                            id: crypto.randomUUID(),
+                                                            text: `Option ${block.options.length + 1}`,
+                                                          },
+                                                        ],
+                                                      });
+                                                    }}
+                                                    className="text-sm text-accent-blue hover:underline"
+                                                  >
+                                                    + Add Option
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {block.type === "image" && (
+                                              <div className="space-y-2">
+                                                <Input
+                                                  label="Image URL"
+                                                  value={block.url}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      url: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Enter image URL"
+                                                />
+                                                <Input
+                                                  label="Alt Text (optional)"
+                                                  value={block.alt || ""}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      alt: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Describe the image"
+                                                />
+                                                {block.url && (
+                                                  <img
+                                                    src={block.url}
+                                                    alt={block.alt || ""}
+                                                    className="mt-2 max-w-full h-auto rounded-lg"
+                                                  />
+                                                )}
+                                              </div>
+                                            )}
+
+                                            {block.type === "iframe" && (
+                                              <div className="space-y-2">
+                                                <Input
+                                                  label="iFrame URL (e.g., YouTube embed, Google Form, etc.)"
+                                                  value={block.url}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      url: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Enter iframe embed URL"
+                                                />
+                                                <Input
+                                                  label="Height (px)"
+                                                  value={block.height || "400"}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      height: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="400"
+                                                />
+                                                {block.url && (
+                                                  <div className="mt-2">
+                                                    <iframe
+                                                      src={block.url}
+                                                      width="100%"
+                                                      height={block.height || "400"}
+                                                      frameBorder="0"
+                                                      allowFullScreen
+                                                      className="rounded-lg border border-gray-200"
+                                                    />
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </SortableItem>
+                                      ))}
+                                    </div>
+                                  </SortableContext>
+                                </DndContext>
+
+                                {/* Add Block Buttons */}
+                                <div className="flex flex-wrap gap-2 pt-4 mt-4 border-t border-gray-200">
+                                  <button
+                                    onClick={() => addBlock(section.id, page.id, "text")}
+                                    className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
+                                  >
+                                    + Text
+                                  </button>
+                                  <button
+                                    onClick={() => addBlock(section.id, page.id, "input")}
+                                    className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
+                                  >
+                                    + Input
+                                  </button>
+                                  <button
+                                    onClick={() => addBlock(section.id, page.id, "checkbox")}
+                                    className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
+                                  >
+                                    + Checkbox
+                                  </button>
+                                  <button
+                                    onClick={() => addBlock(section.id, page.id, "image")}
+                                    className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
+                                  >
+                                    + Image
+                                  </button>
+                                  <button
+                                    onClick={() => addBlock(section.id, page.id, "iframe")}
+                                    className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
+                                  >
+                                    + iFrame
+                                  </button>
+                                </div>
+                              </div>
+                            </SortableItem>
+                          ))}
+                        </SortableContext>
+                      </DndContext>
                     </div>
-                  </div>
+                  </SortableItem>
                 ))}
-              </div>
-            ))}
+              </SortableContext>
+            </DndContext>
 
             {localWorkbook.sections.length === 0 && (
               <div className="text-center py-12 text-gray-500">

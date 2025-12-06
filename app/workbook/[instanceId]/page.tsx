@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState } from "react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import { LoadingPage } from "@/components/ui/LoadingSpinner";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,7 @@ function ResponseInput({
   block: any;
   existingResponse?: string;
 }) {
-  const { value, setValue, saving } = useAutoSave(
+  const { value, setValue, saving, error } = useAutoSave(
     instanceId,
     block.id,
     existingResponse || ""
@@ -51,6 +51,11 @@ function ResponseInput({
           Saving...
         </p>
       )}
+      {error && (
+        <p className="text-xs text-red-600 flex items-center gap-1">
+          ⚠️ {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -64,7 +69,7 @@ function ResponseCheckbox({
   block: any;
   existingResponse?: string[];
 }) {
-  const { value, setValue, saving } = useAutoSave(
+  const { value, setValue, saving, error } = useAutoSave(
     instanceId,
     block.id,
     existingResponse || []
@@ -104,6 +109,11 @@ function ResponseCheckbox({
           Saving...
         </p>
       )}
+      {error && (
+        <p className="text-xs text-red-600 flex items-center gap-1">
+          ⚠️ {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -111,39 +121,13 @@ function ResponseCheckbox({
 export default function WorkbookPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const instanceId = params.instanceId as Id<"workbookInstances">;
-  const inviteToken = searchParams.get("invite");
 
   const user = useQuery(api.users.getCurrentUser);
   const data = useQuery(api.workbookInstances.getInstanceWithWorkbook, { instanceId });
-  const linkInstance = useMutation(api.workbookInstances.linkInstanceToClient);
 
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [isLinking, setIsLinking] = useState(false);
-
-  // Handle invite token linking
-  useEffect(() => {
-    if (user && inviteToken && data?.instance && !data.instance.clientId) {
-      handleLinkInstance();
-    }
-  }, [user, inviteToken, data]);
-
-  const handleLinkInstance = async () => {
-    if (!inviteToken || isLinking) return;
-
-    setIsLinking(true);
-    try {
-      await linkInstance({ instanceId, inviteToken });
-      // Remove invite token from URL
-      router.replace(`/workbook/${instanceId}`);
-    } catch (error) {
-      console.error("Failed to link instance:", error);
-    } finally {
-      setIsLinking(false);
-    }
-  };
 
   // Redirect to login if not authenticated
   if (user === undefined || data === undefined) {
@@ -151,8 +135,7 @@ export default function WorkbookPage() {
   }
 
   if (user === null) {
-    const redirectUrl = `/workbook/${instanceId}${inviteToken ? `?invite=${inviteToken}` : ""}`;
-    router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
+    router.push(`/login?redirect=${encodeURIComponent(`/workbook/${instanceId}`)}`);
     return <LoadingPage />;
   }
 

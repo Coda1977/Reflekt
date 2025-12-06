@@ -8,33 +8,6 @@ function generateInviteToken(): string {
          Math.random().toString(36).substring(2, 15);
 }
 
-// Create new workbook instance (consultant creates for distribution)
-export const createInstance = mutation({
-  args: {
-    workbookId: v.id("workbooks"),
-  },
-  handler: async (ctx, args) => {
-    const userId = await auth.getUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
-
-    // Verify workbook ownership
-    const workbook = await ctx.db.get(args.workbookId);
-    if (!workbook) throw new Error("Workbook not found");
-    if (workbook.consultantId !== userId) {
-      throw new Error("Not authorized");
-    }
-
-    const instanceId = await ctx.db.insert("workbookInstances", {
-      workbookId: args.workbookId,
-      inviteToken: generateInviteToken(),
-      responses: {},
-      lastUpdatedAt: Date.now(),
-    });
-
-    return instanceId;
-  },
-});
-
 // Get instance by ID (for client access)
 export const getInstance = query({
   args: { instanceId: v.id("workbookInstances") },
@@ -61,42 +34,42 @@ export const getInstance = query({
   },
 });
 
-// Get instance by invite token
-export const getInstanceByToken = query({
-  args: { inviteToken: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("workbookInstances")
-      .withIndex("by_invite_token", (q) => q.eq("inviteToken", args.inviteToken))
-      .first();
-  },
-});
-
-// Link instance to client user (after signup/login via QR code)
-export const linkInstanceToClient = mutation({
+// Get or create instance for current user
+// This allows one QR code to be used by multiple clients
+export const getOrCreateInstance = mutation({
   args: {
-    instanceId: v.id("workbookInstances"),
-    inviteToken: v.string(),
+    workbookId: v.id("workbooks"),
   },
   handler: async (ctx, args) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    const instance = await ctx.db.get(args.instanceId);
-    if (!instance) throw new Error("Instance not found");
-    if (instance.inviteToken !== args.inviteToken) {
-      throw new Error("Invalid invite token");
+    // Check if workbook exists
+    const workbook = await ctx.db.get(args.workbookId);
+    if (!workbook) throw new Error("Workbook not found");
+
+    // Check if user already has an instance for this workbook
+    const existingInstance = await ctx.db
+      .query("workbookInstances")
+      .withIndex("by_workbook", (q) => q.eq("workbookId", args.workbookId))
+      .filter((q) => q.eq(q.field("clientId"), userId))
+      .first();
+
+    if (existingInstance) {
+      return existingInstance._id;
     }
 
-    // Link to client if not already linked
-    if (!instance.clientId) {
-      await ctx.db.patch(args.instanceId, {
-        clientId: userId,
-        startedAt: Date.now(),
-      });
-    }
+    // Create new instance for this user
+    const instanceId = await ctx.db.insert("workbookInstances", {
+      workbookId: args.workbookId,
+      clientId: userId,
+      inviteToken: generateInviteToken(),
+      responses: {},
+      startedAt: Date.now(),
+      lastUpdatedAt: Date.now(),
+    });
 
-    return instance;
+    return instanceId;
   },
 });
 
@@ -164,6 +137,7 @@ export const getWorkbookInstances = query({
 });
 
 // Get instance with full workbook data (for rendering)
+// Optimized for concurrent access - batches database reads
 export const getInstanceWithWorkbook = query({
   args: { instanceId: v.id("workbookInstances") },
   handler: async (ctx, args) => {
@@ -185,8 +159,8 @@ export const getInstanceWithWorkbook = query({
       }
     }
 
-    // Get consultant profile for branding
-    const profile = await ctx.db
+    // Get consultant profile for branding (separate query for efficiency)
+    const consultantProfile = await ctx.db
       .query("consultantProfiles")
       .withIndex("by_user", (q) => q.eq("userId", workbook.consultantId))
       .first();
@@ -194,7 +168,7 @@ export const getInstanceWithWorkbook = query({
     return {
       instance,
       workbook,
-      branding: profile?.branding,
+      branding: consultantProfile?.branding,
     };
   },
 });
