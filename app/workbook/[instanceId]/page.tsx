@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
@@ -20,6 +20,11 @@ function ResponseInput({
   block: any;
   existingResponse?: string;
 }) {
+  // DEBUG LOGGING
+  useEffect(() => {
+    console.log(`[ResponseInput:${block.id}] Mount/Update. ExistingResponse prop:`, existingResponse);
+  }, [block.id, existingResponse]);
+
   const { value, setValue, saving, error } = useAutoSave(
     instanceId,
     block.id,
@@ -129,6 +134,14 @@ export default function WorkbookPage() {
 
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+
+  // Debug Log for Parent Data
+  useEffect(() => {
+    if (data?.instance?.responses) {
+      console.log('[WorkbookPage] Data Updated. Responses keys:', Object.keys(data.instance.responses));
+      console.log('[WorkbookPage] Full Responses Snapshot:', JSON.stringify(data.instance.responses));
+    }
+  }, [data]);
 
   // Redirect to login if not authenticated
   if (user === undefined || data === undefined) {
