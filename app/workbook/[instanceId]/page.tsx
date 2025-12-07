@@ -22,8 +22,15 @@ function ResponseInput({
 }) {
   // DEBUG LOGGING
   useEffect(() => {
-    console.log(`[ResponseInput:${block.id}] Mount/Update. ExistingResponse prop:`, existingResponse);
-  }, [block.id, existingResponse]);
+    console.log(`[ResponseInput:${block.id}] MOUNTED. ExistingResponse:`, existingResponse);
+    return () => {
+      console.log(`[ResponseInput:${block.id}] UNMOUNTED.`);
+    };
+  }, [block.id]);
+
+  useEffect(() => {
+    console.log(`[ResponseInput:${block.id}] Prop Update. ExistingResponse:`, existingResponse);
+  }, [existingResponse, block.id]);
 
   const { value, setValue, saving, error } = useAutoSave(
     instanceId,

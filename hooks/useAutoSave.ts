@@ -116,12 +116,13 @@ export function useAutoSave(
     };
   }, [value, performSave]);
 
-  // SAVE ON UNMOUNT (Critical Fix)
+  // SAVE ON UNMOUNT (DISABLED FOR DEBUGGING)
   useEffect(() => {
     return () => {
       if (isDirtyRef.current) {
         console.log('[useAutoSave] Component unmounting with unsaved changes. Force saving:', valueRef.current);
-        performSave(valueRef.current);
+        // performSave(valueRef.current); // <--- DISABLED
+        console.log('[useAutoSave] Component unmounting. Save on Unmount DISABLED for debugging.');
       }
     };
   }, [performSave]);
