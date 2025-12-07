@@ -68,7 +68,15 @@ export function useAutoSave(
       setLastSaved(new Date());
       setError(null);
       retryCountRef.current = 0;
-      isDirtyRef.current = false; // Mark as clean after success
+
+      // CRITICAL FIX: Only mark as clean if the value we just saved 
+      // is still the CURRENT value. If user typed more while we were saving,
+      // we must keep isDirty=true so the next scheduled save fires.
+      if (valuesAreEqual(valueToSave, valueRef.current)) {
+        isDirtyRef.current = false;
+      } else {
+        console.log('[useAutoSave] Save finished, but new changes pending. Keeping isDirty=true.');
+      }
     } catch (err) {
       console.error("[useAutoSave] Failed to save response:", err);
 
@@ -82,7 +90,7 @@ export function useAutoSave(
         retryCountRef.current = 0;
       }
     } finally {
-      // Don't setSaving(false) here if unmounting, but state updates on unmounted component are just ignored usually.
+      // We don't rely on `saving` state much logically, mostly for UI spinner.
       setSaving(false);
     }
   }, [instanceId, blockId, saveResponse]);
@@ -98,7 +106,7 @@ export function useAutoSave(
     setSaving(true);
     setError(null);
 
-    // Debounce for 500ms (reduced from 1000ms for better responsiveness)
+    // Debounce for 500ms
     timeoutRef.current = setTimeout(() => {
       performSave(value);
     }, 500);
@@ -111,11 +119,8 @@ export function useAutoSave(
   // SAVE ON UNMOUNT (Critical Fix)
   useEffect(() => {
     return () => {
-      // If component unmounts and we have unsaved changes, save immediately.
-      // We check isDirtyRef because user might have just saved successfullly.
       if (isDirtyRef.current) {
         console.log('[useAutoSave] Component unmounting with unsaved changes. Force saving:', valueRef.current);
-        // Fire-and-forget save
         performSave(valueRef.current);
       }
     };
