@@ -13,11 +13,13 @@ export const saveResponse = mutation({
     console.log('[saveResponse] Starting save - blockId:', args.blockId, 'value:', args.value);
 
     const userId = await auth.getUserId(ctx);
-    console.log('[saveResponse] User ID:', userId);
+    // console.log('[saveResponse] User ID:', userId); // Redundant log
     if (!userId) throw new Error("Not authenticated");
 
     const instance = await ctx.db.get(args.instanceId);
-    console.log('[saveResponse] Instance found:', !!instance, 'current responses:', instance?.responses);
+    // Debugging the mysterious "reset"
+    console.log('[saveResponse] PRE-UPDATE Instance responses:', JSON.stringify(instance?.responses));
+
     if (!instance) throw new Error("Instance not found");
 
     // Verify client ownership
@@ -32,7 +34,7 @@ export const saveResponse = mutation({
       [args.blockId]: args.value,
     };
 
-    console.log('[saveResponse] Updating responses:', updatedResponses);
+    console.log('[saveResponse] POST-UPDATE (Planned) responses:', JSON.stringify(updatedResponses));
 
     await ctx.db.patch(args.instanceId, {
       responses: updatedResponses,
