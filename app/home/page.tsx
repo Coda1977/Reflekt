@@ -12,19 +12,35 @@ import { useAuth } from "@/lib/auth";
 export default function ClientHomePage() {
   const router = useRouter();
   const user = useQuery(api.users.getCurrentUser);
-  const instances = useQuery(api.workbookInstances.getClientInstances);
+
+  // CRITICAL FIX: Skip this query if user is not authenticated yet.
+  // Otherwise, it throws an error on logout (401), causing the component to crash
+  // or hang before the redirect happens.
+  const instances = useQuery(
+    api.workbookInstances.getClientInstances,
+    user ? {} : "skip"
+  );
+
   const { logout } = useAuth();
 
-  if (user === undefined || instances === undefined) {
+  // 1. Check User Loading
+  if (user === undefined) {
     return <LoadingPage />;
   }
 
+  // 2. Check User Authentication (Handle Logout/Unauth immediately)
   if (user === null) {
     redirect("/login");
   }
 
+  // 3. Check Role Redirect
   if (user.role === "consultant") {
     redirect("/admin");
+  }
+
+  // 4. Check Data Loading (only reached if user is logged in)
+  if (instances === undefined) {
+    return <LoadingPage />;
   }
 
   const handleLogout = async () => {
@@ -124,22 +140,22 @@ export default function ClientHomePage() {
                 const progress = instance.completedAt
                   ? 100
                   : instance.startedAt
-                  ? 50
-                  : 0;
+                    ? 50
+                    : 0;
 
                 const statusColor =
                   progress === 100
                     ? "bg-green-100 text-green-700"
                     : progress > 0
-                    ? "bg-yellow-100 text-yellow-700"
-                    : "bg-gray-100 text-gray-700";
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-gray-100 text-gray-700";
 
                 const statusText =
                   progress === 100
                     ? "Completed"
                     : progress > 0
-                    ? "In Progress"
-                    : "Not Started";
+                      ? "In Progress"
+                      : "Not Started";
 
                 return (
                   <Link key={instance._id} href={`/workbook/${instance._id}`}>
