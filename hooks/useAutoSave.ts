@@ -8,8 +8,9 @@ export function useAutoSave(
   blockId: string,
   initialValue: string | string[]
 ) {
-  // Track if user has made local changes
-  const hasLocalChanges = useRef(false);
+  // Use a ref to track if the user has EVER modified the value locally.
+  // Once true, we ignore all external updates to prevent overwriting user work.
+  const hasUserEdited = useRef(false);
 
   // Helper to compare values (handles arrays)
   const valuesAreEqual = (a: string | string[], b: string | string[]) => {
@@ -19,26 +20,27 @@ export function useAutoSave(
     return a === b;
   };
 
-  // SIMPLE APPROACH: Always use initialValue from Convex unless user has made changes
   const [value, setValue] = useState(initialValue);
-
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // When initialValue changes from Convex and user hasn't made local changes, update the value
+  // Sync with server ONLY if the user hasn't edited locally yet.
+  // This handles the initial load where data might be delayed or updated by others
+  // before the user starts typing.
   useEffect(() => {
-    if (!hasLocalChanges.current && !valuesAreEqual(value, initialValue)) {
-      console.log('[useAutoSave] Loading saved value from Convex:', initialValue);
+    if (!hasUserEdited.current && !valuesAreEqual(value, initialValue)) {
+      console.log('[useAutoSave] Syncing from server (no local edits):', initialValue);
       setValue(initialValue);
     }
   }, [initialValue]);
 
-  // Wrap setValue to track local changes
+  // Wrapped setValue that marks the state as "dirty" (user owned)
   const setValueAndTrackChanges = useCallback((newValue: string | string[]) => {
-    hasLocalChanges.current = true;
+    hasUserEdited.current = true;
     setValue(newValue);
   }, []);
+
   const saveResponse = useMutation(api.responses.saveResponse);
   const timeoutRef = useRef<NodeJS.Timeout>();
   const retryCountRef = useRef(0);
@@ -57,23 +59,18 @@ export function useAutoSave(
       setError(null);
       retryCountRef.current = 0;
 
-      // Reset local changes flag after successful save
-      // This allows Convex updates to flow through again
-      hasLocalChanges.current = false;
+      // CRITICAL CHANGE: Do NOT reset hasUserEdited.
+      // We keep it true so that the inevitable "update" from the server 
+      // (echoing back what we just saved) is ignored.
+
     } catch (err) {
       console.error("[useAutoSave] Failed to save response:", err);
 
-      // Retry logic for transient failures
       if (retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current++;
         console.log(`[useAutoSave] Retrying save (attempt ${retryCountRef.current}/${MAX_RETRIES})...`);
-
-        // Exponential backoff: 1s, 2s, 4s
         const backoffDelay = Math.pow(2, retryCountRef.current - 1) * 1000;
-
-        setTimeout(() => {
-          performSave(valueToSave);
-        }, backoffDelay);
+        setTimeout(() => performSave(valueToSave), backoffDelay);
       } else {
         setError("Failed to save. Please check your connection.");
         retryCountRef.current = 0;
@@ -84,37 +81,22 @@ export function useAutoSave(
   }, [instanceId, blockId, saveResponse]);
 
   useEffect(() => {
-    // Clear existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Only save if user has made local changes
-    if (!hasLocalChanges.current) {
-      return;
-    }
+    // If no user edits, no need to save (unless we want to support "auto-save on initial load" which we don't)
+    if (!hasUserEdited.current) return;
 
-    // Don't save if value equals what we loaded from Convex
-    if (valuesAreEqual(value, initialValue)) {
-      return;
-    }
-
-    // Set saving indicator immediately
     setSaving(true);
     setError(null);
 
-    // Debounce save by 1 second
     timeoutRef.current = setTimeout(() => {
       performSave(value);
     }, 1000);
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+  }, [value, performSave]);
 
   return {
     value,
