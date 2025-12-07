@@ -1,30 +1,34 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import clsx from "clsx";
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signUpWithPassword } = useAuth();
 
+  const redirectUrl = searchParams.get("redirect") || "/home";
+  const shouldBeConsultant = redirectUrl.includes("/admin");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState<"client" | "consultant">("client");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const redirectUrl = searchParams.get("redirect") || "/home";
-  const inviteToken = searchParams.get("invite");
-
-  // Determine role based on redirect URL
-  // If redirecting to admin or no specific redirect, assume consultant
-  // Otherwise, client
-  const role = redirectUrl.includes("/admin") ? "consultant" : "client";
+  // Set initial role based on redirect, but allow changing it
+  useEffect(() => {
+    if (shouldBeConsultant) {
+      setRole("consultant");
+    }
+  }, [shouldBeConsultant]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +55,16 @@ function SignupForm() {
       });
 
       if (result.success) {
-        router.push(redirectUrl);
+        // If they signed up as consultant but redirect was /home (default), send to /admin
+        // If they signed up as client but redirect was /admin, send to /home (safety)
+        let finalRedirect = redirectUrl;
+        if (role === "consultant" && !finalRedirect.includes("/admin")) {
+          finalRedirect = "/admin";
+        } else if (role === "client" && finalRedirect.includes("/admin")) {
+          finalRedirect = "/home";
+        }
+
+        router.push(finalRedirect);
       } else {
         setError(result.error || "Failed to create account");
       }
@@ -68,14 +81,40 @@ function SignupForm() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-black mb-2">Get Started</h1>
           <p className="text-gray-600">
-            {role === "consultant"
-              ? "Create your consultant account"
-              : "Create your account to access your workbook"}
+            Create your account to continue
           </p>
         </div>
 
         <div className="bg-white rounded-2xl p-8 shadow-lg">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Account Type Selector */}
+            <div className="flex p-1 bg-gray-100 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setRole("client")}
+                className={clsx(
+                  "flex-1 py-2 text-sm font-semibold rounded-md transition-all",
+                  role === "client"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900"
+                )}
+              >
+                Client
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole("consultant")}
+                className={clsx(
+                  "flex-1 py-2 text-sm font-semibold rounded-md transition-all",
+                  role === "consultant"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900"
+                )}
+              >
+                Consultant
+              </button>
+            </div>
+
             <Input
               label="Email"
               type="email"
@@ -119,7 +158,7 @@ function SignupForm() {
               className="w-full"
               isLoading={isLoading}
             >
-              Create Account
+              Create {role === 'consultant' ? 'Consultant' : 'Client'} Account
             </Button>
           </form>
 

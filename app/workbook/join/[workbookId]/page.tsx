@@ -19,67 +19,56 @@ export default function JoinWorkbookPage() {
   // Use refs to prevent infinite loops
   const hasStartedCreating = useRef(false);
   const hasStartedRedirect = useRef(false);
+  const retryCount = useRef(0);
 
   useEffect(() => {
-    console.log('[Join Page] Effect running - user:', user === undefined ? 'loading' : user === null ? 'not logged in' : `logged in as ${user.email}`);
-
     // Still loading user
-    if (user === undefined) {
-      console.log('[Join Page] User still loading, waiting...');
-      return;
-    }
+    if (user === undefined) return;
 
     // Not authenticated - redirect to login
     if (user === null) {
-      if (hasStartedRedirect.current) {
-        console.log('[Join Page] Already redirecting to login, skipping...');
-        return;
-      }
-
-      console.log('[Join Page] User not authenticated, redirecting to login...');
+      if (hasStartedRedirect.current) return;
       hasStartedRedirect.current = true;
       const redirectUrl = `/workbook/join/${workbookId}`;
       router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
       return;
     }
 
-    // User is authenticated - but WAIT for user object to have a role
-    // This ensures the auth session is fully established
-    if (!user.role) {
-      console.log('[Join Page] User authenticated but role not set yet, waiting for role...');
-      console.log('[Join Page] User object:', user);
-      return;
-    }
+    // Authenticated but waiting for role (sanity check)
+    if (!user.role) return;
 
-    // User is authenticated with role - get or create their instance
-    if (hasStartedCreating.current) {
-      console.log('[Join Page] Already started creating instance, skipping...');
-      return;
-    }
-
-    console.log('[Join Page] User fully authenticated with role:', user.role, '- waiting for server auth sync...');
+    // Ready to create instance
+    if (hasStartedCreating.current) return;
     hasStartedCreating.current = true;
 
     const createInstance = async () => {
       try {
-        // CRITICAL: Wait for server-side auth to sync with client-side auth
-        // The client-side getCurrentUser query updates faster than server-side auth.getUserId()
-        console.log('[Join Page] Waiting 2 seconds for server-side auth to fully sync...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        console.log('[Join Page] Attempting to get or create instance for workbook:', workbookId);
-        console.log('[Join Page] Current user:', user.email, 'role:', user.role);
-
+        console.log('[Join Page] Creating instance for workbook:', workbookId);
         const instanceId = await getOrCreateInstance({ workbookId });
-
-        console.log('[Join Page] Successfully created/got instance:', instanceId);
+        console.log('[Join Page] Success! Redirecting to:', instanceId);
         router.push(`/workbook/${instanceId}`);
-      } catch (err) {
-        console.error("[Join Page] Failed to access workbook. Error:", err);
-        console.error("[Join Page] Error message:", (err as Error).message);
-        console.error("[Join Page] Error stack:", (err as Error).stack);
+      } catch (err: any) {
+        console.error("[Join Page] Error creating instance:", err);
+
+        // If specific auth error and we haven't retried too much, try again
+        // This handles race conditions where client auth is ready but server context isn't
+        if (retryCount.current < 3) {
+          console.log(`[Join Page] Retrying... (${retryCount.current + 1}/3)`);
+          retryCount.current++;
+          hasStartedCreating.current = false; // Allow effect to run again
+          setTimeout(() => {
+            // Force re-execution by invalidating ref logic via state or just letting effect depend on something? 
+            // Better: just call recursive or let the effect dependency array handle it if we reset the ref.
+            // Since we reset hasStartedCreating.current = false, the next render/effect run will try again.
+            // But we need to trigger a re-run. 
+            // Actually, simply calling createInstance again recursively is safer here.
+            createInstance();
+          }, 1000 * retryCount.current); // Backoff: 1s, 2s, 3s
+          return;
+        }
+
         setError("Failed to access workbook. Please try again.");
-        hasStartedCreating.current = false; // Allow retry
+        hasStartedCreating.current = false;
       }
     };
 
@@ -88,8 +77,8 @@ export default function JoinWorkbookPage() {
 
   const handleRetry = () => {
     hasStartedCreating.current = false;
+    retryCount.current = 0;
     setError(null);
-    // Trigger re-render to retry
     window.location.reload();
   };
 

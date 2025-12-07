@@ -18,6 +18,7 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
 
   const redirectUrl = searchParams.get("redirect") || "/admin";
+  const isJoiningWorkbook = redirectUrl.includes("workbook/join");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +47,12 @@ function LoginForm() {
           <h1 className="text-4xl font-black mb-2">Welcome Back</h1>
           <p className="text-gray-600">Sign in to your Reflekt account</p>
         </div>
+
+        {isJoiningWorkbook && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-sm text-center">
+            👋 To access this workbook, please sign in or create an account.
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl p-8 shadow-lg">
           <form onSubmit={handleSubmit} className="space-y-6">
