@@ -9,8 +9,13 @@ export function useAutoSave(
   initialValue: string | string[]
 ) {
   // Use a ref to track if the user has EVER modified the value locally.
-  // Once true, we ignore all external updates to prevent overwriting user work.
   const hasUserEdited = useRef(false);
+
+  // Track if we have unsaved changes
+  const isDirtyRef = useRef(false);
+
+  // Keep track of latest value for unmount save
+  const valueRef = useRef(initialValue);
 
   // Helper to compare values (handles arrays)
   const valuesAreEqual = (a: string | string[], b: string | string[]) => {
@@ -25,19 +30,24 @@ export function useAutoSave(
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
+  // Update valueRef whenever value changes so unmount effect sees it
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
   // Sync with server ONLY if the user hasn't edited locally yet.
-  // This handles the initial load where data might be delayed or updated by others
-  // before the user starts typing.
   useEffect(() => {
     if (!hasUserEdited.current && !valuesAreEqual(value, initialValue)) {
       console.log('[useAutoSave] Syncing from server (no local edits):', initialValue);
       setValue(initialValue);
+      valueRef.current = initialValue;
     }
   }, [initialValue]);
 
-  // Wrapped setValue that marks the state as "dirty" (user owned)
+  // Wrapped setValue that marks the state as "dirty"
   const setValueAndTrackChanges = useCallback((newValue: string | string[]) => {
     hasUserEdited.current = true;
+    isDirtyRef.current = true;
     setValue(newValue);
   }, []);
 
@@ -58,11 +68,7 @@ export function useAutoSave(
       setLastSaved(new Date());
       setError(null);
       retryCountRef.current = 0;
-
-      // CRITICAL CHANGE: Do NOT reset hasUserEdited.
-      // We keep it true so that the inevitable "update" from the server 
-      // (echoing back what we just saved) is ignored.
-
+      isDirtyRef.current = false; // Mark as clean after success
     } catch (err) {
       console.error("[useAutoSave] Failed to save response:", err);
 
@@ -76,27 +82,44 @@ export function useAutoSave(
         retryCountRef.current = 0;
       }
     } finally {
+      // Don't setSaving(false) here if unmounting, but state updates on unmounted component are just ignored usually.
       setSaving(false);
     }
   }, [instanceId, blockId, saveResponse]);
 
+  // Debounced auto-save effect
   useEffect(() => {
+    // Clear any pending save
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // If no user edits, no need to save (unless we want to support "auto-save on initial load" which we don't)
-    if (!hasUserEdited.current) return;
+    // If no user edits or not dirty, do nothing
+    if (!hasUserEdited.current || !isDirtyRef.current) return;
 
     setSaving(true);
     setError(null);
 
+    // Debounce for 500ms (reduced from 1000ms for better responsiveness)
     timeoutRef.current = setTimeout(() => {
       performSave(value);
-    }, 1000);
+    }, 500);
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [value, performSave]);
+
+  // SAVE ON UNMOUNT (Critical Fix)
+  useEffect(() => {
+    return () => {
+      // If component unmounts and we have unsaved changes, save immediately.
+      // We check isDirtyRef because user might have just saved successfullly.
+      if (isDirtyRef.current) {
+        console.log('[useAutoSave] Component unmounting with unsaved changes. Force saving:', valueRef.current);
+        // Fire-and-forget save
+        performSave(valueRef.current);
+      }
+    };
+  }, [performSave]);
 
   return {
     value,
