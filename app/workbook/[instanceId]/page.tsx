@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
@@ -9,7 +9,6 @@ import { LoadingPage } from "@/components/ui/LoadingSpinner";
 import { Button } from "@/components/ui/Button";
 import { TiptapRenderer } from "@/components/editor/TiptapEditor";
 import { useAutoSave } from "@/hooks/useAutoSave";
-import clsx from "clsx";
 
 function ResponseInput({
   instanceId,
@@ -20,18 +19,6 @@ function ResponseInput({
   block: any;
   existingResponse?: string;
 }) {
-  // DEBUG LOGGING
-  useEffect(() => {
-    console.log(`[ResponseInput:${block.id}] MOUNTED. ExistingResponse:`, existingResponse);
-    return () => {
-      console.log(`[ResponseInput:${block.id}] UNMOUNTED.`);
-    };
-  }, [block.id]);
-
-  useEffect(() => {
-    console.log(`[ResponseInput:${block.id}] Prop Update. ExistingResponse:`, existingResponse);
-  }, [existingResponse, block.id]);
-
   const { value, setValue, saving, error } = useAutoSave(
     instanceId,
     block.id,
@@ -136,19 +123,10 @@ export default function WorkbookPage() {
   const instanceId = params.instanceId as Id<"workbookInstances">;
 
   const user = useQuery(api.users.getCurrentUser);
-  // Disable caching to always get fresh data
   const data = useQuery(api.workbookInstances.getInstanceWithWorkbook, { instanceId });
 
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-
-  // Debug Log for Parent Data
-  useEffect(() => {
-    if (data?.instance?.responses) {
-      console.log('[WorkbookPage] Data Updated. Responses keys:', Object.keys(data.instance.responses));
-      console.log('[WorkbookPage] Full Responses Snapshot:', JSON.stringify(data.instance.responses));
-    }
-  }, [data]);
 
   // Redirect to login if not authenticated
   if (user === undefined || data === undefined) {

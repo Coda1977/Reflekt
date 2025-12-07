@@ -36,7 +36,7 @@ export function useAutoSave(
   }, [value]);
 
   // Sync with server ONLY if the user hasn't edited locally yet.
-  // CRITICAL: This must NOT trigger a save - use raw setValue, not the dirty-marking wrapper
+  // This must NOT trigger a save - use raw setValue, not the dirty-marking wrapper
   useEffect(() => {
     if (!hasUserEdited.current && !valuesAreEqual(value, initialValue)) {
       // Only sync if initialValue has actual content (not empty)
@@ -45,7 +45,6 @@ export function useAutoSave(
         (!Array.isArray(initialValue) || initialValue.length > 0);
       
       if (hasContent) {
-        console.log('[useAutoSave] Syncing from server (no local edits):', initialValue);
         setValue(initialValue);
         valueRef.current = initialValue;
       }
@@ -68,31 +67,25 @@ export function useAutoSave(
 
   const performSave = useCallback(async (valueToSave: string | string[]) => {
     try {
-      console.log('[useAutoSave] Saving to Convex:', valueToSave);
       await saveResponse({
         instanceId,
         blockId,
         value: valueToSave,
       });
-      console.log('[useAutoSave] Save successful!');
       setLastSaved(new Date());
       setError(null);
       retryCountRef.current = 0;
 
-      // CRITICAL FIX: Only mark as clean if the value we just saved 
-      // is still the CURRENT value. If user typed more while we were saving,
-      // we must keep isDirty=true so the next scheduled save fires.
+      // Only mark as clean if the value we just saved is still the CURRENT value.
+      // If user typed more while we were saving, keep isDirty=true so the next save fires.
       if (valuesAreEqual(valueToSave, valueRef.current)) {
         isDirtyRef.current = false;
-      } else {
-        console.log('[useAutoSave] Save finished, but new changes pending. Keeping isDirty=true.');
       }
     } catch (err) {
       console.error("[useAutoSave] Failed to save response:", err);
 
       if (retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current++;
-        console.log(`[useAutoSave] Retrying save (attempt ${retryCountRef.current}/${MAX_RETRIES})...`);
         const backoffDelay = Math.pow(2, retryCountRef.current - 1) * 1000;
         setTimeout(() => performSave(valueToSave), backoffDelay);
       } else {
@@ -100,7 +93,6 @@ export function useAutoSave(
         retryCountRef.current = 0;
       }
     } finally {
-      // We don't rely on `saving` state much logically, mostly for UI spinner.
       setSaving(false);
     }
   }, [instanceId, blockId, saveResponse]);
@@ -126,16 +118,21 @@ export function useAutoSave(
     };
   }, [value, performSave]);
 
-  // SAVE ON UNMOUNT (DISABLED FOR DEBUGGING)
+  // Save on unmount if there are unsaved changes
   useEffect(() => {
     return () => {
-      if (isDirtyRef.current) {
-        console.log('[useAutoSave] Component unmounting with unsaved changes. Force saving:', valueRef.current);
-        // performSave(valueRef.current); // <--- DISABLED
-        console.log('[useAutoSave] Component unmounting. Save on Unmount DISABLED for debugging.');
+      if (isDirtyRef.current && hasUserEdited.current) {
+        // Fire and forget - component is unmounting
+        saveResponse({
+          instanceId,
+          blockId,
+          value: valueRef.current,
+        }).catch(() => {
+          // Silently fail - user is navigating away
+        });
       }
     };
-  }, [performSave]);
+  }, [instanceId, blockId, saveResponse]);
 
   return {
     value,
