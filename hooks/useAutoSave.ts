@@ -36,11 +36,21 @@ export function useAutoSave(
   }, [value]);
 
   // Sync with server ONLY if the user hasn't edited locally yet.
+  // CRITICAL: This must NOT trigger a save - use raw setValue, not the dirty-marking wrapper
   useEffect(() => {
     if (!hasUserEdited.current && !valuesAreEqual(value, initialValue)) {
-      console.log('[useAutoSave] Syncing from server (no local edits):', initialValue);
-      setValue(initialValue);
-      valueRef.current = initialValue;
+      // Only sync if initialValue has actual content (not empty)
+      // This prevents syncing stale empty values during component re-mount race conditions
+      const hasContent = initialValue !== "" &&
+        (!Array.isArray(initialValue) || initialValue.length > 0);
+      
+      if (hasContent) {
+        console.log('[useAutoSave] Syncing from server (no local edits):', initialValue);
+        setValue(initialValue);
+        valueRef.current = initialValue;
+      }
+      // Explicitly ensure we're NOT dirty after server sync
+      isDirtyRef.current = false;
     }
   }, [initialValue]);
 

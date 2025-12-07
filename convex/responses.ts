@@ -28,6 +28,19 @@ export const saveResponse = mutation({
       throw new Error("Not authorized");
     }
 
+    // CRITICAL FIX: Never overwrite existing data with empty strings
+    // This prevents race conditions from wiping user data during component re-mounts
+    const existingValue = instance.responses[args.blockId];
+    const isEmptyValue = args.value === "" || (Array.isArray(args.value) && args.value.length === 0);
+    const hasExistingData = existingValue !== undefined && existingValue !== "" &&
+      (!Array.isArray(existingValue) || existingValue.length > 0);
+    
+    if (isEmptyValue && hasExistingData) {
+      console.log('[saveResponse] BLOCKED: Refusing to overwrite existing data with empty value');
+      console.log('[saveResponse] Existing:', existingValue, '| Attempted:', args.value);
+      return { success: true, blocked: true };
+    }
+
     // Update responses object
     const updatedResponses = {
       ...instance.responses,

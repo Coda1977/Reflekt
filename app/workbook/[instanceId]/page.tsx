@@ -424,10 +424,10 @@ export default function WorkbookPage() {
             </h2>
           </div>
 
-          {/* Blocks */}
+          {/* Blocks - Using stable keys to prevent unnecessary re-mounts */}
           <div className="space-y-8">
             {currentPage.blocks.map((block: any) => (
-              <div key={block.id}>
+              <div key={`${instanceId}-${block.id}`}>
                 {block.type === "text" && (
                   <div className="prose prose-lg max-w-none">
                     <TiptapRenderer content={block.content} />
@@ -436,6 +436,7 @@ export default function WorkbookPage() {
 
                 {block.type === "input" && (
                   <ResponseInput
+                    key={`input-${instanceId}-${block.id}`}
                     instanceId={instanceId}
                     block={block}
                     existingResponse={instance.responses[block.id] as string}
@@ -444,6 +445,7 @@ export default function WorkbookPage() {
 
                 {block.type === "checkbox" && (
                   <ResponseCheckbox
+                    key={`checkbox-${instanceId}-${block.id}`}
                     instanceId={instanceId}
                     block={block}
                     existingResponse={instance.responses[block.id] as string[]}
