@@ -27,7 +27,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
-type BlockType = "text" | "input" | "checkbox" | "image" | "iframe";
+type BlockType = "text" | "input" | "checkbox" | "image" | "iframe" | "table";
 
 export default function EditWorkbookPage() {
   const params = useParams();
@@ -37,7 +37,7 @@ export default function EditWorkbookPage() {
   const workbook = useQuery(api.workbooks.getWorkbook, { workbookId });
   const updateWorkbook = useMutation(api.workbooks.updateWorkbook);
 
-  const [localWorkbook, setLocalWorkbook] = useState<typeof workbook>(undefined);
+  const [localWorkbook, setLocalWorkbook] = useState<any>(undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
@@ -105,16 +105,16 @@ export default function EditWorkbookPage() {
       sections: localWorkbook.sections.map((section) =>
         section.id === sectionId
           ? {
-              ...section,
-              pages: [
-                ...section.pages,
-                {
-                  id: crypto.randomUUID(),
-                  title: `Page ${section.pages.length + 1}`,
-                  blocks: [],
-                },
-              ],
-            }
+            ...section,
+            pages: [
+              ...section.pages,
+              {
+                id: crypto.randomUUID(),
+                title: `Page ${section.pages.length + 1}`,
+                blocks: [],
+              },
+            ],
+          }
           : section
       ),
     });
@@ -139,9 +139,9 @@ export default function EditWorkbookPage() {
       sections: localWorkbook.sections.map((section) =>
         section.id === sectionId
           ? {
-              ...section,
-              pages: section.pages.filter((page) => page.id !== pageId),
-            }
+            ...section,
+            pages: section.pages.filter((page) => page.id !== pageId),
+          }
           : section
       ),
     });
@@ -180,6 +180,17 @@ export default function EditWorkbookPage() {
         newBlock.url = "";
         newBlock.height = "400";
         break;
+      case "table":
+        newBlock.label = "Table Question";
+        newBlock.columns = [
+          { id: crypto.randomUUID(), header: "Column A" },
+          { id: crypto.randomUUID(), header: "Column B" },
+        ];
+        newBlock.rows = [
+          { id: crypto.randomUUID(), label: "Row 1" },
+          { id: crypto.randomUUID(), label: "Row 2" },
+        ];
+        break;
     }
 
     setLocalWorkbook({
@@ -187,13 +198,13 @@ export default function EditWorkbookPage() {
       sections: localWorkbook.sections.map((section) =>
         section.id === sectionId
           ? {
-              ...section,
-              pages: section.pages.map((page) =>
-                page.id === pageId
-                  ? { ...page, blocks: [...page.blocks, newBlock] }
-                  : page
-              ),
-            }
+            ...section,
+            pages: section.pages.map((page) =>
+              page.id === pageId
+                ? { ...page, blocks: [...page.blocks, newBlock] }
+                : page
+            ),
+          }
           : section
       ),
     });
@@ -207,18 +218,18 @@ export default function EditWorkbookPage() {
       sections: localWorkbook.sections.map((section) =>
         section.id === sectionId
           ? {
-              ...section,
-              pages: section.pages.map((page) =>
-                page.id === pageId
-                  ? {
-                      ...page,
-                      blocks: page.blocks.map((block: any) =>
-                        block.id === blockId ? { ...block, ...updates } : block
-                      ),
-                    }
-                  : page
-              ),
-            }
+            ...section,
+            pages: section.pages.map((page) =>
+              page.id === pageId
+                ? {
+                  ...page,
+                  blocks: page.blocks.map((block: any) =>
+                    block.id === blockId ? { ...block, ...updates } : block
+                  ),
+                }
+                : page
+            ),
+          }
           : section
       ),
     });
@@ -232,16 +243,16 @@ export default function EditWorkbookPage() {
       sections: localWorkbook.sections.map((section) =>
         section.id === sectionId
           ? {
-              ...section,
-              pages: section.pages.map((page) =>
-                page.id === pageId
-                  ? {
-                      ...page,
-                      blocks: page.blocks.filter((block: any) => block.id !== blockId),
-                    }
-                  : page
-              ),
-            }
+            ...section,
+            pages: section.pages.map((page) =>
+              page.id === pageId
+                ? {
+                  ...page,
+                  blocks: page.blocks.filter((block: any) => block.id !== blockId),
+                }
+                : page
+            ),
+          }
           : section
       ),
     });
@@ -261,19 +272,19 @@ export default function EditWorkbookPage() {
         sections: prev.sections.map((section) =>
           section.id === sectionId
             ? {
-                ...section,
-                pages: section.pages.map((page) => {
-                  if (page.id !== pageId) return page;
+              ...section,
+              pages: section.pages.map((page) => {
+                if (page.id !== pageId) return page;
 
-                  const oldIndex = page.blocks.findIndex((b: any) => b.id === active.id);
-                  const newIndex = page.blocks.findIndex((b: any) => b.id === over.id);
+                const oldIndex = page.blocks.findIndex((b: any) => b.id === active.id);
+                const newIndex = page.blocks.findIndex((b: any) => b.id === over.id);
 
-                  return {
-                    ...page,
-                    blocks: arrayMove(page.blocks, oldIndex, newIndex),
-                  };
-                }),
-              }
+                return {
+                  ...page,
+                  blocks: arrayMove(page.blocks, oldIndex, newIndex),
+                };
+              }),
+            }
             : section
         ),
       };
@@ -673,6 +684,119 @@ export default function EditWorkbookPage() {
                                                 )}
                                               </div>
                                             )}
+
+                                            {block.type === "table" && (
+                                              <div className="space-y-4">
+                                                <Input
+                                                  label="Question Label"
+                                                  value={block.label}
+                                                  onChange={(e) =>
+                                                    updateBlock(section.id, page.id, block.id, {
+                                                      label: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Enter your question"
+                                                />
+
+                                                {/* Columns Editor */}
+                                                <div className="space-y-2">
+                                                  <label className="text-sm font-semibold">Columns:</label>
+                                                  {block.columns.map((col: any, colIndex: number) => (
+                                                    <div key={col.id} className="flex gap-2">
+                                                      <Input
+                                                        value={col.header}
+                                                        onChange={(e) => {
+                                                          const newCols = [...block.columns];
+                                                          newCols[colIndex] = { ...col, header: e.target.value };
+                                                          updateBlock(section.id, page.id, block.id, {
+                                                            columns: newCols,
+                                                          });
+                                                        }}
+                                                        placeholder={`Column ${colIndex + 1}`}
+                                                      />
+                                                      <button
+                                                        onClick={() => {
+                                                          const newCols = block.columns.filter(
+                                                            (_: any, i: number) => i !== colIndex
+                                                          );
+                                                          updateBlock(section.id, page.id, block.id, {
+                                                            columns: newCols,
+                                                          });
+                                                        }}
+                                                        className="text-red-600 hover:text-red-700 text-sm"
+                                                      >
+                                                        ×
+                                                      </button>
+                                                    </div>
+                                                  ))}
+                                                  <button
+                                                    onClick={() => {
+                                                      updateBlock(section.id, page.id, block.id, {
+                                                        columns: [
+                                                          ...block.columns,
+                                                          {
+                                                            id: crypto.randomUUID(),
+                                                            header: `Column ${block.columns.length + 1}`,
+                                                          },
+                                                        ],
+                                                      });
+                                                    }}
+                                                    className="text-sm text-accent-blue hover:underline"
+                                                  >
+                                                    + Add Column
+                                                  </button>
+                                                </div>
+
+                                                {/* Rows Editor */}
+                                                <div className="space-y-2">
+                                                  <label className="text-sm font-semibold">Rows:</label>
+                                                  {block.rows.map((row: any, rowIndex: number) => (
+                                                    <div key={row.id} className="flex gap-2">
+                                                      <Input
+                                                        value={row.label}
+                                                        onChange={(e) => {
+                                                          const newRows = [...block.rows];
+                                                          newRows[rowIndex] = { ...row, label: e.target.value };
+                                                          updateBlock(section.id, page.id, block.id, {
+                                                            rows: newRows,
+                                                          });
+                                                        }}
+                                                        placeholder={`Row ${rowIndex + 1}`}
+                                                      />
+                                                      <button
+                                                        onClick={() => {
+                                                          const newRows = block.rows.filter(
+                                                            (_: any, i: number) => i !== rowIndex
+                                                          );
+                                                          updateBlock(section.id, page.id, block.id, {
+                                                            rows: newRows,
+                                                          });
+                                                        }}
+                                                        className="text-red-600 hover:text-red-700 text-sm"
+                                                      >
+                                                        ×
+                                                      </button>
+                                                    </div>
+                                                  ))}
+                                                  <button
+                                                    onClick={() => {
+                                                      updateBlock(section.id, page.id, block.id, {
+                                                        rows: [
+                                                          ...block.rows,
+                                                          {
+                                                            id: crypto.randomUUID(),
+                                                            label: `Row ${block.rows.length + 1}`,
+                                                          },
+                                                        ],
+                                                      });
+                                                    }}
+                                                    className="text-sm text-accent-blue hover:underline"
+                                                  >
+                                                    + Add Row
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
                                           </div>
                                         </SortableItem>
                                       ))}
@@ -711,6 +835,12 @@ export default function EditWorkbookPage() {
                                     className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
                                   >
                                     + iFrame
+                                  </button>
+                                  <button
+                                    onClick={() => addBlock(section.id, page.id, "table")}
+                                    className="px-3 py-1 bg-white border-2 border-gray-300 hover:border-gray-400 rounded text-sm font-semibold transition-colors"
+                                  >
+                                    + Table
                                   </button>
                                 </div>
                               </div>

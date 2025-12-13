@@ -8,6 +8,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { LoadingPage } from "@/components/ui/LoadingSpinner";
 import { Button } from "@/components/ui/Button";
 import { TiptapRenderer } from "@/components/editor/TiptapEditor";
+import { TableInput } from "@/components/ui/TableInput";
 import { useAutoSave } from "@/hooks/useAutoSave";
 
 function ResponseInput({
@@ -438,6 +439,14 @@ export default function WorkbookPage() {
                       className="w-full h-auto"
                     />
                   </div>
+                )}
+
+                {block.type === "table" && (
+                  <TableInput
+                    instanceId={instanceId}
+                    block={block}
+                    existingResponse={instance.responses[block.id] as Record<string, string>}
+                  />
                 )}
               </div>
             ))}

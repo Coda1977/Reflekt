@@ -79,6 +79,24 @@ export const schema = defineSchema({
                   url: v.string(),
                   alt: v.optional(v.string()),
                 }),
+                // Table block
+                v.object({
+                  type: v.literal("table"),
+                  id: v.string(),
+                  label: v.string(),
+                  columns: v.array(
+                    v.object({
+                      id: v.string(),
+                      header: v.string(),
+                    })
+                  ),
+                  rows: v.array(
+                    v.object({
+                      id: v.string(),
+                      label: v.string(),
+                    })
+                  ),
+                }),
                 // iFrame block
                 v.object({
                   type: v.literal("iframe"),
